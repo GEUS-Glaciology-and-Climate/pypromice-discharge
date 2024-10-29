@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pypromice-discharge"
+version = "0.0.1"
+dynamic = ["version"]
+dependencies = [
+  "pypromice>1.4.0",
+]
+requires-python = ">= 3.10"
+description = "Process AWS and discharge data"
+readme = "README.md"
+license =  {file = "LICENSE"}
+authors = [
+  {name = "Rasmus Bahbah Nielsen", email = "rabni@geus.dk"},
+  {name = "Penelope How", email = "pho@geus.dk"},
+  {name = "Mads Christian Lund", email = "maclu@geus.dk"},
+]
+maintainers = [
+  {name = "Rasmus Bahbah Nielsen", email = "rabni@geus.dk"}
+]
+keywords = ["promice", "aws", "discharge", "greenland"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+]
+
+[project.optional-dependencies]
+bufr = ["eccodes"]
+
+[project.scripts]
+get_watsontx = "get_watsontx.get_watsontx"
+
+[project.urls]
+Homepage = "https://promice.dk"
+Documentation = "https://github.com/GEUS-Glaciology-and-Climate/pypromice-discharge/blob/main/README.md"
+Repository = "https://github.com/GEUS-Glaciology-and-Climate/pypromice-discharge"
+Issues = "https://github.com/GEUS-Glaciology-and-Climate/pypromice-discharge/issues"
