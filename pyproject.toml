@@ -34,7 +34,7 @@ classifiers = [
 bufr = ["eccodes"]
 
 [project.scripts]
-get_watsontx = "get_watsontx.get_watsontx"
+get_watsontx = "get_watsontx:main"
 
 [project.urls]
 Homepage = "https://promice.dk"
