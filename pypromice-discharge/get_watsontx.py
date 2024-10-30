@@ -30,28 +30,15 @@ def parse_arguments_watson():
     return args
 
 #------------------------------------------------------------------------------
-def get_watsontx():
-    """Executed from the command line"""
-    args = parse_arguments_watson()
-    
-     # Set payload formatter paths
-    formatter_file = args.formats
-    type_file = args.types
-
- 	# Set credential paths
-    accounts_file = args.account
-    credentials_file = args.password 
-
- 	# Set last aws uid path
- 	# last_uid = 1000000
-    uid_file = args.uid
-    
+def get_watsontx(formatter_file, type_file, accounts_file, credentials_file, 
+		uid_file, out_dir):
+    """Fetch Watson catchment tx messages"""
+        
     # Set last aws uid path
     with open(uid_file, 'r') as last_uid_f:
         last_uid = int(last_uid_f.readline())
     
     # Set output file directory
-    out_dir = args.outpath
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
     
@@ -149,6 +136,13 @@ def get_watsontx():
         print(f'Could not write last uid {uid} to {uid_file}')
          
     print('Finished')
-        
+
+def main():
+    """Executed from the command line"""
+    args = parse_arguments_watson()
+ 
+    get_watsontx(args.formats, args.types, args.account, args.password,
+    		args.uid, args.outpath)
+    
 if __name__ == "__main__":  
-    get_watsontx()
+    main()
