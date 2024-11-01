@@ -108,6 +108,12 @@ def get_l1(l0_list, config, l0_air=None):
         # Apply time offset
         ds['time'] = offset_time(ds['time'], c['utc_offset'])
         
+        if 'analog_dvr_scale' in c: 
+            if 'h_l_h' in ds:
+                ds['h_l_h'] = ds['h_l_h'] * 10**-2 # Going from centimeters water level to meters
+            elif 'h_u_h' in ds:
+                ds['h_u_h'] = ds['h_u_h'] * 10**-2 # Going from centimeters water level to meters
+        
         # Calculate upper and lower dH
         if 'dh_bolt_u' in c and 'dh_diver_u' in c:
             h_u_dvr = calc_dh(c['dh_bolt_u'], c['dh_diver_u'], c['dH_0']) 
@@ -139,7 +145,7 @@ def get_l1(l0_list, config, l0_air=None):
   
     if l0_air != None:
         print('Merging external atmospheric data...')
-        l1 = xr.merge([l1,l0_air])
+        l1 = xr.merge([l1,l0_air],compat='override')
     
     print('L1 processing complete')   
     return l1
@@ -178,7 +184,7 @@ def get_l2(L1):
                                    ds['h_u_dvr'])
     # adding the raw water level data to the file
     if raw_l2 is not None:
-        ds['h_u_h'] = ds['h_l_h'].fillna(raw_l2)
+        ds['h_u_h'] = ds['h_u_h'].fillna(raw_l2)
 
     # Fill air temperature gaps with interpolated values
     print('Smoothing and interpolating atmospheric data...')
