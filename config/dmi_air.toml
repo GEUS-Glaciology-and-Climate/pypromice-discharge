@@ -1,0 +1,21 @@
+station_id = "dmi_air"
+dH_0=9.01
+nodata=["-999", "NAN"]
+
+
+#["DMI_Kangerlussuaq.txt"]
+#format="txt"
+#skiprows=1
+#utc_offset=0
+#p_offset_a=0
+#columns=['station','year','month','day','hour','t_air','SKIP_6']
+
+["DMI_Kangerlussuaq.csv"]
+format="csv"
+skiprows=137055
+utc_offset=0
+p_offset_a=0
+columns=['station','year','month','day','hour','t_air','SKIP_6','SKIP_7','SKIP_8',
+	'SKIP_9','SKIP_10','SKIP_11','SKIP_12','SKIP_13','SKIP_14',
+	'SKIP_15','SKIP_16','SKIP_17','SKIP_18','SKIP_19','SKIP_20',
+	'SKIP_21','SKIP_22']

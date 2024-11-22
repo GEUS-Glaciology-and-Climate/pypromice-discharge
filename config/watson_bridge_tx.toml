@@ -1,0 +1,33 @@
+station_id = "watson_bridge"
+dH_0=9.01
+nodata=["-999", "NAN"]
+
+["watson_station_tx.txt"]
+format="TX"
+skiprows=1
+utc_offset=0
+dh_bolt_u=12.66
+dh_diver_u=1.2
+dh_bolt_l=10.98
+dh_diver_l=0
+p_offset_u=800
+p_offset_l=800
+p_offset_a=0
+columns=["time","SKIP_1","rh_air","p_air","SKIP_4","p_wtr_l",
+	 "p_wtr_u","p_wtr_m","sr_bridge1","sr_bridge2","precip_cum",
+	 "SKIP_11","SKIP_12","batt_v"]
+
+["Watson10MinTable.txt"]
+format="TX"
+skiprows=1
+utc_offset=0
+dh_bolt_u=12.66
+dh_diver_u=1.2
+dh_bolt_l=10.98
+dh_diver_l=0
+p_offset_u=800
+p_offset_l=800
+p_offset_a=0
+columns=["time","t_air","rh_air","p_air","SKIP_4","SKIP_5",
+	"SKIP_6","p_wtr_l","p_wtr_u","p_wtr_m","sr_bridge1",
+	"sr_bridge2","precip_cum","SKIP_13","SKIP_14","batt_v"]

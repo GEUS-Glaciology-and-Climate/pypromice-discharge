@@ -12,7 +12,7 @@ import xarray as xr
 from pathlib import Path
 from datetime import timedelta, datetime
 
-def process(inpath, config_file, air_config=None, air_inpath=None):
+def process(inpath, config_file, air_config=None, air_inpath=None,l1=False):
     '''Perform Level 0 to Level 3 processing'''
     # assert(os.path.isfile(config_file))
     # assert(os.path.isdir(inpath))
@@ -33,11 +33,15 @@ def process(inpath, config_file, air_config=None, air_inpath=None):
         l0_air=None
     
     # Perform processing
-    l1 = get_l1(ds_list, config, l0_air)
-    l2 = get_l2(l1)
-    l3 = get_l3(l2)
-    return l3
-          
+    
+    if not l1:
+        l1 = get_l1(ds_list, config, l0_air)
+        l2 = get_l2(l1)
+        l3 = get_l3(l2)
+        return l3
+    else:
+        l1 = get_l1(ds_list, config, l0_air,cor=False)
+        return l1
 def get_l0(config):
     '''Get L0 discharge data from config file'''
     ds_list=[]
@@ -85,12 +89,75 @@ def write_csv(ds, outfile):
     '''Write Dataset to .csv file'''
     df = ds.to_dataframe()
     df.to_csv(outfile) 
-    
+   
+
 def write_netcdf(ds, outfile):
     '''Write Dataset to .nc file'''
     ds.to_netcdf(outfile, mode='w', format='NETCDF4', compute=True)             
     
-def get_l1(l0_list, config, l0_air=None):
+"""
+def write_netcdf(ds, filename):
+    '''Write Dataset to .nc file'''
+    
+    meta = pd.read_csv("nc_var_meta.csv")
+    title_name = meta['title']
+    names = meta["names"] 
+    longnames = meta["long_names"]
+    units = meta["units"]
+    ds_out = nc.Dataset(filename, 'w', format='NETCDF4')
+    current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    time_dim = ds_out.createDimension('time', len(ds.time))
+    
+    time_var = ds.createVariable('time', np.datetime64, ('time'), zlib=True)
+    time_var.units = 'degrees_north'
+    time_var.standard_name = 'time in YYYY-MM-DDTHH:MM:SS'
+    time_var.axis = ''
+    time_var[:] = ds.time
+
+    ds_out.title = f"Hourly Hydrological Monitoring  at {title_name}, promice_discharge v. 2.1"
+    ds_out.summary = ''
+    ds_out.keywords = 'Cryosphere > Land Ice > Land Ice Albedo > Reflectance > Greenland > Northern Hemisphere > Grain Size'
+    ds_out.instrument = "OLCI"
+    ds_out.platform = "Sentinel-3A"
+    ds_out.start_date_and_time = date + "T08:00:00Z"
+    ds_out.end_date_and_time = date + "T16:00:00Z"
+    ds_out.naming_authority = "geus.dk"
+    
+    ds_out.summary = ''
+    ds_out.keywords = 'Cryosphere > Land Ice > Land Ice Albedo > Reflectance > Greenland > Northern Hemisphere > Grain Size'
+    ds_out.activity = 'Space Borne Instrument'
+    ds_out.geospatial_lat_min = lat_min
+    ds_out.geospatial_lat_max = lat_max
+    ds_out.geospatial_lon_min = lon_min
+    ds_out.geospatial_lon_max = lon_max
+    ds_out.time_coverage_start = date + "T08:00:00Z"
+    ds_out.time_coverage_end = date + "T16:00:00Z"
+    ds_out.history = current_date + ' processed'
+    ds_out.date_created = current_date
+    ds_out.creator_type = "group"
+    ds_out.creator_institution = "Geological Survey of Denmark and Greenland (GEUS)"
+    ds_out.creator_email = " jeb@geus.dk, bav@geus.dk, rabni@geus.dk,adrien.wehrle@geo.uzh.ch"
+    ds_out.creator_name = "Jason Box, Baptiste Vandecrux, Rasmus Bahbah Nielsen, Adrien Wehrlé"
+    ds_out.creator_url = "https://orcid.org/0000-0003-2342-639X"
+    ds_out.institution = "Geological Survey of Denmark and Greenland (GEUS)"
+    ds_out.publisher_type = "Institute"
+    ds_out.publisher_name = "Geological Survey of Denmark and Greenland (GEUS), Glaciology and Climate Department"
+    ds_out.publisher_url = "geus.dk"
+    ds_out.publisher_email= "jeb@geus.dk"
+    ds_out.project = "Operational Sentinel-3 snow and ice products (SICE)"
+    ds_out.license = "None"
+    
+    for v in ds: 
+        if v in names:
+            idx = names.index(v)
+            z_out = ds.createVariable(v, 'f4', ('time'),zlib=True)
+            z_out[:] = ds[v].to_numpy()
+            z_out.standard_name = v
+            z_out.long_name = longnames[idx]
+            z_out.units = units[idx]
+            
+"""    
+def get_l1(l0_list, config, l0_air=None,cor=True):
     '''Perform L0 to L1 processing, where input is from a list of Dataset objects
     and corresponding config toml file'''
     ds_list=[]
@@ -108,30 +175,44 @@ def get_l1(l0_list, config, l0_air=None):
         # Apply time offset
         ds['time'] = offset_time(ds['time'], c['utc_offset'])
         
-        if 'analog_dvr_scale' in c: 
-            if 'h_l_h' in ds:
-                ds['h_l_h'] = ds['h_l_h'] * 10**-2 # Going from centimeters water level to meters
-            elif 'h_u_h' in ds:
-                ds['h_u_h'] = ds['h_u_h'] * 10**-2 # Going from centimeters water level to meters
-        
-        # Calculate upper and lower dH
-        if 'dh_bolt_u' in c and 'dh_diver_u' in c:
-            h_u_dvr = calc_dh(c['dh_bolt_u'], c['dh_diver_u'], c['dH_0']) 
-            ds['h_u_dvr'] = (('time'), [h_u_dvr]*len(ds['time'].values))
+        if cor:
+            if 'analog_dvr_scale' in c: 
+                if 'h_wtr_1' in ds:
+                    ds['h_wtr_1'] = ds['h_l_h'] * 10**-2 # Going from centimeters water level to meters
+                elif 'h_wtr_1' in ds:
+                    ds['h_wtr_1'] = ds['h_u_h'] * 10**-2 # Going from centimeters water level to meters
             
-        if 'dh_bolt_l' in c and 'dh_diver_l' in c:            
-            h_l_dvr = calc_dh(c['dh_bolt_l'], c['dh_diver_l'], c['dH_0']) 
-            ds['h_l_dvr'] = (('time'), [h_l_dvr]*len(ds['time'].values))               
-        # Mask out where p_wtr_u and p_wtr_l are nan to also be nan here
-        
-        # Apply pressure offset, also apply to p_wtr_l, p_air
-        if hasattr(ds, 'p_wtr_u'): 
-            ds['p_wtr_u_cor'] = offset_press(ds['p_wtr_u'], c['p_offset_u']) 
-            ds['p_wtr_u_cor'] = ds['p_wtr_u_cor'].where(ds['p_wtr_u_cor'] != 1450.0)
-        if hasattr(ds, 'p_wtr_l'):
-            ds['p_wtr_l_cor'] = offset_press(ds['p_wtr_l'], c['p_offset_l'])
-        if hasattr(ds, 'p_air'):
-            ds['p_air_cor'] = offset_press(ds['p_air'], c['p_offset_a'])
+            # Calculate upper and lower dH
+            
+            if 'dh_bolt_1' in c and 'dh_diver_1' in c:            
+                h_dvr_1 = calc_dh(c['dh_bolt_1'], c['dh_diver_1'], c['dH_0']) 
+                ds['h_dvr_1'] = (('time'), [h_dvr_1]*len(ds['time'].values))     
+                
+            if 'dh_bolt_2' in c and 'dh_diver_2' in c:
+                h_dvr_2 = calc_dh(c['dh_bolt_2'], c['dh_diver_2'], c['dH_0']) 
+                ds['h_dvr_2'] = (('time'), [h_dvr_2]*len(ds['time'].values))
+            
+            if 'dh_bolt_3' in c and 'dh_diver_3' in c:            
+                h_dvr_3 = calc_dh(c['dh_bolt_3'], c['dh_diver_3'], c['dH_0']) 
+                ds['h_dvr_3'] = (('time'), [h_dvr_3]*len(ds['time'].values))   
+                
+                if 'dh_bolt_2' not in c and 'dh_diver_2' not in c:
+                    h_dvr_2 = calc_dh(c['dh_bolt_3'], c['dh_diver_3'], c['dH_0']) 
+                    ds['h_dvr_2'] = (('time'), [h_dvr_2]*len(ds['time'].values))
+                
+            # Mask out where p_wtr_u and p_wtr_l are nan to also be nan here
+            
+            # Apply pressure offset, also apply to p_wtr_l, p_air
+            if hasattr(ds, 'p_wtr_1'):
+                ds['p_wtr_1_cor'] = offset_press(ds['p_wtr_1'], c['p_offset_1'])
+            if hasattr(ds, 'p_wtr_2'): 
+                ds['p_wtr_2_cor'] = offset_press(ds['p_wtr_2'], c['p_offset_2']) 
+                ds['p_wtr_2_cor'] = ds['p_wtr_2_cor'].where(ds['p_wtr_2_cor'] != 1450.0)
+            if hasattr(ds, 'p_wtr_3'): 
+                ds['p_wtr_3_cor'] = offset_press(ds['p_wtr_3'], c['p_offset_3']) 
+                ds['p_wtr_3_cor'] = ds['p_wtr_3_cor'].where(ds['p_wtr_3_cor'] != 1450.0)
+            if hasattr(ds, 'p_air_baro'):
+                ds['p_air_baro_cor'] = offset_press(ds['p_air_baro'], c['p_offset_a'])
   
         # Resample to hourly mean values
         ds = resample_data(ds, '60min')
@@ -145,9 +226,17 @@ def get_l1(l0_list, config, l0_air=None):
   
     if l0_air != None:
         print('Merging external atmospheric data...')
+        
         l1 = xr.merge([l1,l0_air],compat='override')
+        if hasattr(ds, 't_air_baro'):
+            l1['t_air_comb'] = xr.merge([l1['t_air_baro'], l0_air['t_air_dmi']],compat='override')
+        else:
+            l1['t_air_comb'] =  l1['t_air_dmi'] 
+        #l1 = xr.merge([l1,l0_air],compat='override')
+        
+        
     
-    print('L1 processing complete')   
+    print('L1 processing complete')
     return l1
         
 def get_l2(L1):
@@ -156,40 +245,51 @@ def get_l2(L1):
     print('Calculating water level...')
         
     # Checking if there is any water level data in the raw data
-    if 'h_l_h' in ds:
-        raw_l2 = ds['h_l_h']
+    if 'h_wtr_1' in ds:
+        raw_l2 = ds['h_wtr_1']
     else :
         raw_l2 = None    
             
     # Calculate water level with air pressure adjustment (p = H rho g)                
     # Perform this only if p_wtr_l_cor-p_air_cor > p_dif_min and t_wtr_l_cor > t_wtr_min:    
-    ds['h_l_h'] = calc_water_level(ds['p_wtr_l_cor'], 
-                                   ds['p_air_cor'], 
-                                   ds['h_l_dvr'])      
+    ds['h_wtr_1'] = calc_water_level(ds['p_wtr_1_cor'], 
+                                   ds['p_air_baro_cor'], 
+                                   ds['h_dvr_1'])      
   
     # adding the raw water level data to the file
     if raw_l2 is not None:
-        ds['h_l_h'] = ds['h_l_h'].fillna(raw_l2)
+        ds['h_wtr_1'] = ds['h_wtr_1'].fillna(raw_l2)
    
     # Checking if there is any water level data in the raw data
-    if 'h_u_h' in ds:
-        raw_l2 = ds['h_u_h']
+    if 'h_wtr_2' in ds:
+        raw_l2 = ds['h_wtr_2']
     else :
         raw_l2 = None    
         
     # Perform this only if p_wtr_u_cor-p_air_cor > p_dif_min and t_wtr_u_cor > t_wtr_min:     
    
-    ds['h_u_h'] = calc_water_level(ds['p_wtr_u_cor'], 
-                                   ds['p_air_cor'],
-                                   ds['h_u_dvr'])
+    ds['h_wtr_2'] = calc_water_level(ds['p_wtr_2_cor'], 
+                                   ds['p_air_baro_cor'],
+                                   ds['h_dvr_2'])
     # adding the raw water level data to the file
     if raw_l2 is not None:
-        ds['h_u_h'] = ds['h_u_h'].fillna(raw_l2)
+        ds['h_wtr_2'] = ds['h_wtr_2'].fillna(raw_l2)
+    
+    
+    ds['h_wtr_3'] = calc_water_level(ds['p_wtr_3_cor'], 
+                                   ds['p_air_baro_cor'],
+                                   ds['h_dvr_3'])
 
     # Fill air temperature gaps with interpolated values
+    
+    
+    # Fill air temperature gaps with interpolated values
     print('Smoothing and interpolating atmospheric data...')
-    ds['t_air_interp'] = ds['t_air'].interpolate_na('time', method='linear')
+    ds['t_air_interp'] = ds['t_air_comb'].interpolate_na('time', method='linear')
     ds['t_air_smooth'] = ds['t_air_interp'].rolling(time=240).mean()
+    
+    ds['t_air_pos'] = ds['t_air_smooth'].where(ds['t_air_smooth']>0, other=0)
+    ds['t_air_pos'] = ds['t_air_pos'].where(~np.isnan(ds['t_air_smooth']))
 
     print('L2 processing complete')
     return ds
@@ -200,29 +300,31 @@ def get_l3(L2):
   
     # Calculate diver discharge
     print('Deriving diver-only discharge...')
-    ds['q_l_h'] = calc_discharge(ds['h_l_h'])
+    ds['q_wtr_1'] = calc_discharge(ds['h_wtr_1'])
     # l2['q_l_h_unc'] = l2['q_l_h']*0.15 
-    ds['q_u_h'] = calc_discharge(ds['h_u_h'])
+    ds['q_wtr_2'] = calc_discharge(ds['h_wtr_2'])
     # l2['q_u_h_unc'] = l2['q_u_h']*0.15 
-    ds['q_h'] = ds['q_u_h'].combine_first(ds['q_l_h'])    
-    ds['q_h_unc'] = ds['q_h']*0.15     
+    ds['q_wtr_3'] = calc_discharge(ds['h_wtr_3'])
+    
+    
+    
+    ds['q_wtr_comb'] = ds['q_wtr_1'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_3'])    
+    ds['q_wtr_comb_unc'] = ds['q_wtr_comb']*0.15     
     
     # Calculate diver + temperature discharge
     # Determined using IDL program Discharge_from_T_DMI  
     print('Deriving diver and temperature linked discharge...')
-    ds['t_air_pos'] = ds['t_air_smooth'].where(ds['t_air_smooth']>0, other=0)
-    ds['t_air_pos'] = ds['t_air_pos'].where(~np.isnan(ds['t_air_smooth']))
+   
+    ds['q_wtr_mod_spring'] = 0.17*ds['t_air_pos']**3.4
+    ds['q_wtr_mod_autumn'] = 0.31*ds['t_air_pos']**3.4
     
-    ds['q_h_spring'] = 0.17*ds['t_air_pos']**3.4
-    ds['q_h_autumn'] = 0.31*ds['t_air_pos']**3.4
+    ds['q_wtr_mod_spring'] = ds['q_wtr_mod_spring'].where(ds['time.month']<=6)
+    ds['q_wtr_mod_autumn'] = ds['q_wtr_mod_autumn'].where(ds['time.month']>=7)  
     
-    ds['q_h_spring'] = ds['q_h_spring'].where(ds['time.month']<=6)
-    ds['q_h_autumn'] = ds['q_h_autumn'].where(ds['time.month']>=7)  
+    ds['q_wtr_mod_all'] = ds['q_wtr_mod_spring'].combine_first(ds['q_wtr_mod_autumn']) 
+    ds['q_wtr_ext'] = ds['q_wtr_comb'].combine_first(ds['q_wtr_mod_all'])
     
-    ds['q_h_all'] = ds['q_h_spring'].combine_first(ds['q_h_autumn']) 
-    ds['q_h_ext'] = ds['q_h'].combine_first(ds['q_h_all'])
-    
-    ds['q_h_ext_unc'] = ds['q_h_unc'].combine_first(ds['q_h_ext']*0.7)
+    ds['q_wtr_ext_unc'] = ds['q_wtr_comb_unc'].combine_first(ds['q_wtr_ext']*0.7)
     
     # Calculate cumulative discharge
     print('Deriving cumulative discharge...')
@@ -230,18 +332,18 @@ def get_l3(L2):
     cum_group = xr.DataArray([t.year if ((t.month <= 4) or ((t.month==4) and (t.day < 1))) else (t.year + 1) for t in ds.indexes['time']], dims='time', name='my_years', coords={'time': ds['time']})
     
     # use that array of years (integers) to do the groupby
-    ds['q_h_ext_cum'] = ds['q_h_ext'].groupby(cum_group).apply(lambda x: x.cumsum(dim='time', skipna=True))
+    ds['q_wtr_ext_cum'] = ds['q_wtr_ext'].groupby(cum_group).apply(lambda x: x.cumsum(dim='time', skipna=True))
     # l2['q_ext_h_cum'] = l2['q_ext_h'].cumsum(skipna=True)
-    ds['q_h_ext_cum'] = ds['q_h_ext_cum'].where(ds['time.month'] > 4)
-    ds['q_h_ext_cum'] = ds['q_h_ext_cum'].where(ds['time.month'] < 11)
+    ds['q_wtr_ext_cum'] = ds['q_wtr_ext_cum'].where(ds['time.month'] > 4)
+    ds['q_wtr_ext_cum'] = ds['q_wtr_ext_cum'].where(ds['time.month'] < 11)
     
-    ds['q_h_ext_cum_unc'] = ds['q_h_ext_unc'].groupby(cum_group).apply(lambda x: x.cumsum(dim='time', skipna=True))    
+    ds['q_wtr_ext_cum_unc'] = ds['q_wtr_ext_unc'].groupby(cum_group).apply(lambda x: x.cumsum(dim='time', skipna=True))    
     # l2['q_ext_h_cum_unc'] = l2['q_ext_h_unc'].cumsum(skipna=True)
-    ds['q_h_ext_cum_unc'] = ds['q_h_ext_cum_unc'].where(ds['time.month'] > 4)
-    ds['q_h_ext_cum_unc'] = ds['q_h_ext_cum_unc'].where(ds['time.month'] < 10)
+    ds['q_wtr_ext_cum_unc'] = ds['q_wtr_ext_cum_unc'].where(ds['time.month'] > 4)
+    ds['q_wtr_ext_cum_unc'] = ds['q_wtr_ext_cum_unc'].where(ds['time.month'] < 10)
     
-    ds['q_h_ext_cum'] = ds['q_h_ext_cum']*1.e-9*3600. 
-    ds['q_h_ext_cum_unc'] = ds['q_h_ext_cum_unc']*1.e-9*3600.     
+    ds['q_wtr_ext_cum'] = ds['q_wtr_ext_cum']*1.e-9*3600. 
+    ds['q_wtr_ext_cum_unc'] = ds['q_wtr_ext_cum_unc']*1.e-9*3600.     
     
     print('L3 processing complete')  
     return ds          
@@ -554,13 +656,16 @@ if __name__ == "__main__":
     print('Commencing Bridge station tx processing...')
     config_file = '../config/watson_bridge_tx.toml'
     out_csv = out_dir+'watson_bridge_l3_tx.csv'
+    out_nc_l1 = out_dir+'watson_bridge_l1_tx.nc'
     out_nc = out_dir+'watson_bridge_l3_tx.nc'
     
     ds = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir)
+    ds_l1 = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir,l1=True)
+    write_netcdf(ds_l1,out_nc_l1)
     write_csv(ds, out_csv)
     write_netcdf(ds, out_nc)  
     
-
+   
     # GIOS Russel station site tx data processing
     print('Commencing GIOS Russel station tx processing...')    
     config_file = '../config/GIOS_Russel.toml'
@@ -592,3 +697,5 @@ if __name__ == "__main__":
     ds = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir)
     write_csv(ds, out_csv)
     write_netcdf(ds, out_nc)  
+    
+    
