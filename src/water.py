@@ -14,6 +14,19 @@ from pathlib import Path
 from datetime import timedelta, datetime
 from upload import dataverse_upload
 
+from argparse import ArgumentParser
+
+
+def parse_arguments_watson():
+    parser = ArgumentParser(description="AWS L0 transmission fetcher for Watson River measurements")       
+    parser.add_argument('-c', '--config', default=None, type=str, required=True, help='path to config files')
+    parser.add_argument('-t', '--transmissions', default=None, type=str, required=True, help='Path to tranmissions')                      
+    parser.add_argument('-r', '--raw', default=None, type=str, required=True, help='path to raw data')           
+    parser.add_argument('-ot', '--outtransmission', default=None, type=str, required=True, help='path to raw data')     
+    parser.add_argument('-or', '--outraw', default=None, type=str, required=True, help='path to raw data')          
+    args = parser.parse_args()
+    return args
+
 def process(inpath, config_file, air_config=None, air_inpath=None,l1=False):
     '''Perform Level 0 to Level 3 processing'''
     # assert(os.path.isfile(config_file))
@@ -684,6 +697,7 @@ def calc_discharge(H): # Version 3 by Dirk van As
 
 if __name__ == "__main__":
     
+    
     config_dir = '../config/'
     l0_raw_dir = '../level_0/raw'
     l0_tx_dir = '../level_0/tx'
@@ -701,7 +715,7 @@ if __name__ == "__main__":
     ds = process(l0_raw_dir, config_file, air_config_file, l0_dmi_dir)
     write_csv(ds, out_csv)
     write_txt(ds, out_txt,config_dir)
-    write_netcdf(ds, out_nc)  
+    write_netcdf(ds, out_nc)
     
     # # Bridge station site old tx data processing
     # print('Commencing Bridge station tx processing...')
