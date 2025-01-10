@@ -8,9 +8,11 @@ Created on Wed Mar  8 11:37:47 2023
 import toml, os
 import numpy as np
 import pandas as pd
+import csv
 import xarray as xr
 from pathlib import Path
 from datetime import timedelta, datetime
+from upload import dataverse_upload
 
 def process(inpath, config_file, air_config=None, air_inpath=None,l1=False):
     '''Perform Level 0 to Level 3 processing'''
@@ -89,11 +91,57 @@ def write_csv(ds, outfile):
     '''Write Dataset to .csv file'''
     df = ds.to_dataframe()
     df.to_csv(outfile) 
+    
+def write_txt(ds,outdir,config_dir):
+    '''Write Dataset to .csv file'''
+    
+    time_s = ['hourly','l0']
+    sample_time = [None,None,60*24,60*24*365]
+    
+    time = pd.to_datetime(ds['time'].values)
+    
+    ds = ds.assign(
+        year=('time', time.year),
+        month=('time', time.month),
+        dom=('time', time.day),
+        hour=('time', time.hour),
+        doy=('time', time.dayofyear),
+        doc=('time', (time - pd.Timestamp('2000-01-01')).days)
+    )
+    
+    for ts,sa in zip(time_s,sample_time):
+        if sa:
+            ds = resample_data(ds, f'{sa}min')
+        ds = ds.fillna(-9999)    
+        ds = ds.apply(lambda x: x.round(2))
+        meta = pd.read_csv(config_dir+os.sep+f'meta_txt_{ts}.csv',delimiter=';')
+        data_names = list(meta['Pipeline_Name'])
+        output_names = list(meta['Output_Name'])
+        units = list(meta['units'])
+        
+        print(output_names)
+        
+        df = pd.DataFrame({o:ds[d] for o,d in zip(output_names,data_names)})        
+      
+        df.columns = [col.split('_')[0] for col in df.columns]  # Remove any leading/trailing spaces
+        df.columns = [ o + ' ' + u if isinstance(u, str) else o for o,u in zip(df.columns,units)]
+        df.columns = [col.strip() for col in df.columns]  # Remove any leading/trailing spaces
+
+        df.to_csv(outdir+os.sep+f'Watson River Discharge (2006-2024) {ts}.txt' 
+                  ,index=False,  # Do not include the index
+                  encoding='utf-8',  # Specify UTF-8 encoding
+                  header=True,  # Ensure header is included
+                  sep='\t',      # Ensure consistent delimiter)
+                  quoting=csv.QUOTE_NONE,  # Disable quoting
+                  escapechar='\\'  # Escape special characters, if needed
+                   )
    
+
 
 def write_netcdf(ds, outfile):
     '''Write Dataset to .nc file'''
     ds.to_netcdf(outfile, mode='w', format='NETCDF4', compute=True)             
+    ds.close()
     
 """
 def write_netcdf(ds, filename):
@@ -264,9 +312,9 @@ def get_l2(L1):
     if 'h_wtr_2' in ds:
         raw_l2 = ds['h_wtr_2']
     else :
-        raw_l2 = None    
+        raw_l2 = None
         
-    # Perform this only if p_wtr_u_cor-p_air_cor > p_dif_min and t_wtr_u_cor > t_wtr_min:     
+    # Perform this only if p_wtr_u_cor-p_air_cor > p_dif_min and t_wtr_u_cor > t_wtr_min:
    
     ds['h_wtr_2'] = calc_water_level(ds['p_wtr_2_cor'], 
                                    ds['p_air_baro_cor'],
@@ -276,12 +324,11 @@ def get_l2(L1):
         ds['h_wtr_2'] = ds['h_wtr_2'].fillna(raw_l2)
     
     
-    ds['h_wtr_3'] = calc_water_level(ds['p_wtr_3_cor'], 
+    ds['h_wtr_3'] = calc_water_level(ds['p_wtr_3_cor'],
                                    ds['p_air_baro_cor'],
                                    ds['h_dvr_3'])
 
     # Fill air temperature gaps with interpolated values
-    
     
     # Fill air temperature gaps with interpolated values
     print('Smoothing and interpolating atmospheric data...')
@@ -307,9 +354,12 @@ def get_l3(L2):
     ds['q_wtr_3'] = calc_discharge(ds['h_wtr_3'])
     
     
+    ds['h_wtr_comb'] = ds['h_wtr_1'].combine_first(ds['h_wtr_2']).combine_first(ds['h_wtr_3'])   
+    ds['t_wtr_comb'] = ds['t_wtr_1'].combine_first(ds['t_wtr_2']).combine_first(ds['t_wtr_3'])   
     
-    ds['q_wtr_comb'] = ds['q_wtr_1'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_3'])    
-    ds['q_wtr_comb_unc'] = ds['q_wtr_comb']*0.15     
+    
+    ds['q_wtr_comb'] = ds['q_wtr_1'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_3'])   
+    ds['q_wtr_comb_unc'] = ds['q_wtr_comb']*0.15
     
     # Calculate diver + temperature discharge
     # Determined using IDL program Discharge_from_T_DMI  
@@ -345,7 +395,7 @@ def get_l3(L2):
     ds['q_wtr_ext_cum'] = ds['q_wtr_ext_cum']*1.e-9*3600. 
     ds['q_wtr_ext_cum_unc'] = ds['q_wtr_ext_cum_unc']*1.e-9*3600.     
     
-    print('L3 processing complete')  
+    print('L3 processing complete')
     return ds          
             
 def get_config(config_file, inpath):
@@ -610,6 +660,8 @@ def calc_water_level(p_wtr, p_air, h_dvr, p_dif_min=5., t_wtr_min=-100.):
         Water level
 
     '''
+   
+    
     diff = p_wtr - p_air  
     diff = diff.where(diff > p_dif_min) 
     return h_dvr + (diff/98.2) 
@@ -630,7 +682,6 @@ def calc_discharge(H): # Version 3 by Dirk van As
     ''' 
     return 7.50536*H**2.34002 
 
-
 if __name__ == "__main__":
     
     config_dir = '../config/'
@@ -640,62 +691,63 @@ if __name__ == "__main__":
     l0_dmi_dir = '../level_0/dmi'
     out_dir = '../level_3/'
 
-    
     # Bridge station site raw data processing
     print('Commencing River station raw processing...')
     config_file = config_dir+'watson_bridge_raw.toml'
     out_csv = out_dir+'watson_bridge_l3_raw.csv'
     out_nc = out_dir+'watson_bridge_l3_raw.nc'
+    out_txt = out_dir
     
     ds = process(l0_raw_dir, config_file, air_config_file, l0_dmi_dir)
     write_csv(ds, out_csv)
+    write_txt(ds, out_txt,config_dir)
     write_netcdf(ds, out_nc)  
     
+    # # Bridge station site old tx data processing
+    # print('Commencing Bridge station tx processing...')
+    # config_file = '../config/watson_bridge_tx.toml'
+    # out_csv = out_dir+'watson_bridge_l3_tx.csv'
+    # out_nc_l1 = out_dir+'watson_bridge_l1_tx.nc'
+    # out_nc = out_dir+'watson_bridge_l3_tx.nc'
     
-    # Bridge station site old tx data processing
-    print('Commencing Bridge station tx processing...')
-    config_file = '../config/watson_bridge_tx.toml'
-    out_csv = out_dir+'watson_bridge_l3_tx.csv'
-    out_nc_l1 = out_dir+'watson_bridge_l1_tx.nc'
-    out_nc = out_dir+'watson_bridge_l3_tx.nc'
+    # ds = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir)
+    # ds_l1 = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir,l1=True)
+    # write_netcdf(ds_l1,out_nc_l1)
+    # write_csv(ds, out_csv)
+    # write_netcdf(ds, out_nc)  
     
-    ds = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir)
-    ds_l1 = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir,l1=True)
-    write_netcdf(ds_l1,out_nc_l1)
-    write_csv(ds, out_csv)
-    write_netcdf(ds, out_nc)  
+    # # GIOS Russel station site tx data processing
+    # print('Commencing GIOS Russel station tx processing...')    
+    # config_file = '../config/GIOS_Russel.toml'
+    # out_csv = out_dir+'GIOS_Russel_l3_tx.csv'
+    # out_nc = out_dir+'GIOS_Russel_l3_tx.nc'
     
-   
-    # GIOS Russel station site tx data processing
-    print('Commencing GIOS Russel station tx processing...')    
-    config_file = '../config/GIOS_Russel.toml'
-    out_csv = out_dir+'GIOS_Russel_l3_tx.csv'
-    out_nc = out_dir+'GIOS_Russel_l3_tx.nc'
-    
-    ds = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir)
-    write_csv(ds, out_csv)
-    write_netcdf(ds, out_nc)      
+    # ds = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir)
+    # write_csv(ds, out_csv)
+    # write_netcdf(ds, out_nc)
 
-
-    # GIOS Watson L station site tx data processing
-    print('Commencing GIOS Watson L station tx processing...')
-    config_file = '../config/GIOS_Watson_L.toml'
-    out_csv = out_dir+'GIOS_Watson_L_l3_tx.csv'
-    out_nc = out_dir+'GIOS_Watson_L_l3_tx.nc'
+    # # GIOS Watson L station site tx data processing
+    # print('Commencing GIOS Watson L station tx processing...')
+    # config_file = '../config/GIOS_Watson_L.toml'
+    # out_csv = out_dir+'GIOS_Watson_L_l3_tx.csv'
+    # out_nc = out_dir+'GIOS_Watson_L_l3_tx.nc'
     
-    ds = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir)
-    write_csv(ds, out_csv)
-    write_netcdf(ds, out_nc)  
+    # ds = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir)
+    # write_csv(ds, out_csv)
+    # write_netcdf(ds, out_nc)
 
-
-    # GIOS LR site tx data processing
-    print('Commencing GIOS LR station tx processing...')
-    config_file = '../config/GIOS_LR.toml'
-    out_csv = out_dir+'GIOS_LR_l3_tx.csv'
-    out_nc = out_dir+'GIOS_LR_l3_tx.nc'
+    # # GIOS LR site tx data processing
+    # print('Commencing GIOS LR station tx processing...')
+    # config_file = '../config/GIOS_LR.toml'
+    # out_csv = out_dir+'GIOS_LR_l3_tx.csv'
+    # out_nc = out_dir+'GIOS_LR_l3_tx.nc'
     
-    ds = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir)
-    write_csv(ds, out_csv)
-    write_netcdf(ds, out_nc)  
+    # ds = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir)
+    # write_csv(ds, out_csv)
+    # write_netcdf(ds, out_nc)  
+    
+    # Uploading to Dataverse
+    
+    
     
     
