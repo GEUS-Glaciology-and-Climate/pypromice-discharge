@@ -1,10 +1,11 @@
- #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 """
-Created on Wed Mar  8 11:37:47 2023
+Created on Fri Jan 10 15:40:15 2025
 
-@author: pho
+@author: pho & rabni
 """
+
 import toml, os
 import numpy as np
 import pandas as pd
@@ -18,12 +19,12 @@ from argparse import ArgumentParser
 
 
 def parse_arguments_watson():
-    parser = ArgumentParser(description="watson raw l0->l3 processor")            
+    parser = ArgumentParser(description="watson tx l0->l3 processor")       
     parser.add_argument('-c', '--config', default=None, type=str, required=True, help='path to config files')
-    parser.add_argument('-t', '--transmissions', default=None, type=str, required=True, help='Path to tranmissions')                      
-    parser.add_argument('-r', '--raw', default=None, type=str, required=True, help='path to raw data')           
-    parser.add_argument('-ot', '--outtransmission', default=None, type=str, required=True, help='path to raw data')     
-    parser.add_argument('-or', '--outraw', default=None, type=str, required=True, help='path to raw data')          
+    parser.add_argument('-d', '--data', default=None, type=str, required=True, help='Path to tranmissions')              
+    parser.add_argument('-dm', '--dmi', default=None, type=str, required=True, help='Path to dmi data')                          
+    parser.add_argument('-o', '--out', default=None, type=str, required=True, help='path to output folder')          
+    parser.add_argument('-s', '--stations', default=None, type=str, required=False, help='stations to process, if needed')          
     args = parser.parse_args()
     return args
 
@@ -697,69 +698,31 @@ def calc_discharge(H): # Version 3 by Dirk van As
 
 if __name__ == "__main__":
     
+    args = parse_arguments_watson()
+ 
+    config_dir = args.config
+    dmi_dir = args.dmi
+    l0_dir = args.data
+    out_dir = args.out
+    air_config_file = config_dir + os.sep + 'dmi_air.toml'
     
-    config_dir = '../config/'
-    l0_raw_dir = '../level_0/raw'
-    l0_tx_dir = '../level_0/tx'
-    air_config_file = '../config/dmi_air.toml'
-    l0_dmi_dir = '../level_0/dmi'
-    out_dir = '../level_3/'
-
+    meta = pd.read_csv(config_dir + os.sep + 'station_meta.csv')
+    tx_name = meta['tx_name']
+    st_name = meta['out_tx_name']
+    
     # Bridge station site raw data processing
-    print('Commencing River station raw processing...')
-    config_file = config_dir+'watson_bridge_raw.toml'
-    out_csv = out_dir+'watson_bridge_l3_raw.csv'
-    out_nc = out_dir+'watson_bridge_l3_raw.nc'
-    out_txt = out_dir
+    print('Commencing station tx processing...')
     
-    ds = process(l0_raw_dir, config_file, air_config_file, l0_dmi_dir)
-    write_csv(ds, out_csv)
-    write_txt(ds, out_txt,config_dir)
-    write_netcdf(ds, out_nc)
+    for tx,st in zip(tx_name,st_name):
+        out = out_dir + os.sep + st
+        config_file = config_dir + os.sep + f'{tx}.toml'
+        ds = process(l0_dir, config_file, air_config_file, dmi_dir)
+        write_csv(ds, f'{out}.csv')
+        write_txt(ds, f'{out}.txt',config_dir)
+        write_netcdf(ds, f'{out}.nc')
     
-    # # Bridge station site old tx data processing
-    # print('Commencing Bridge station tx processing...')
-    # config_file = '../config/watson_bridge_tx.toml'
-    # out_csv = out_dir+'watson_bridge_l3_tx.csv'
-    # out_nc_l1 = out_dir+'watson_bridge_l1_tx.nc'
-    # out_nc = out_dir+'watson_bridge_l3_tx.nc'
     
-    # ds = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir)
-    # ds_l1 = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir,l1=True)
-    # write_netcdf(ds_l1,out_nc_l1)
-    # write_csv(ds, out_csv)
-    # write_netcdf(ds, out_nc)  
-    
-    # # GIOS Russel station site tx data processing
-    # print('Commencing GIOS Russel station tx processing...')    
-    # config_file = '../config/GIOS_Russel.toml'
-    # out_csv = out_dir+'GIOS_Russel_l3_tx.csv'
-    # out_nc = out_dir+'GIOS_Russel_l3_tx.nc'
-    
-    # ds = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir)
-    # write_csv(ds, out_csv)
-    # write_netcdf(ds, out_nc)
 
-    # # GIOS Watson L station site tx data processing
-    # print('Commencing GIOS Watson L station tx processing...')
-    # config_file = '../config/GIOS_Watson_L.toml'
-    # out_csv = out_dir+'GIOS_Watson_L_l3_tx.csv'
-    # out_nc = out_dir+'GIOS_Watson_L_l3_tx.nc'
-    
-    # ds = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir)
-    # write_csv(ds, out_csv)
-    # write_netcdf(ds, out_nc)
-
-    # # GIOS LR site tx data processing
-    # print('Commencing GIOS LR station tx processing...')
-    # config_file = '../config/GIOS_LR.toml'
-    # out_csv = out_dir+'GIOS_LR_l3_tx.csv'
-    # out_nc = out_dir+'GIOS_LR_l3_tx.nc'
-    
-    # ds = process(l0_tx_dir, config_file, air_config_file, l0_dmi_dir)
-    # write_csv(ds, out_csv)
-    # write_netcdf(ds, out_nc)  
-    
     # Uploading to Dataverse
     
     
