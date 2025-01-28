@@ -136,7 +136,7 @@ def write_txt(ds,outdir,config_dir):
         df = pd.DataFrame({o:ds[d] for o,d in zip(output_names,data_names)})        
       
         df.columns = [col.split('_')[0] for col in df.columns]  # Remove any leading/trailing spaces
-        df.columns = [ o + ' ' + u if isinstance(u, str) else o for o,u in zip(df.columns,units)]
+        df.columns = [o + ' ' + u if isinstance(u, str) else o for o,u in zip(df.columns,units)]
         df.columns = [col.strip() for col in df.columns]  # Remove any leading/trailing spaces
 
         df.to_csv(outdir+os.sep+f'Watson River Discharge (2006-2024) {ts}.txt' 
