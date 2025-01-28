@@ -3,13 +3,13 @@ requires = ["setuptools >= 61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pypromice-discharge"
+name = "pypromice_discharge"
 version = "0.0.1"
 dependencies = [
   "pypromice>1.4.0",
 ]
 requires-python = ">= 3.10"
-description = "Process AWS and discharge data"
+description = "Process river discharge data"
 readme = "README.md"
 license =  {file = "LICENSE"}
 authors = [
