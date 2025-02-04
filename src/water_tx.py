@@ -296,8 +296,17 @@ def get_l1(l0_list, config, l0_air=None,cor=True):
             l1['t_air_comb'] =  l1['t_air_dmi'] 
         #l1 = xr.merge([l1,l0_air],compat='override')
         
-        
     
+    print('L1 Static Filtering')
+    if hasattr(l1, 'p_wtr_1_cor'):
+        l1 = remove_static(l1,'p_wtr_1_cor')
+    if hasattr(l1, 'p_wtr_2_cor'):
+        l1 = remove_static(l1,'p_wtr_2_cor')
+    if hasattr(l1, 'p_wtr_3_cor'):
+        l1= remove_static(l1,'p_wtr_3_cor')
+    print('L1 processing complete')
+   
+
     print('L1 processing complete')
     return l1
         
@@ -695,6 +704,25 @@ def calc_discharge(H): # Version 3 by Dirk van As
         Discharge array
     ''' 
     return 7.50536*H**2.34002 
+
+
+# Function to detect stuck values and replace them with -9999
+def remove_static(dataset, var_name, threshold=5, replacement=-9999):
+    values = dataset[var_name].values  # Extract the variable as a NumPy array
+    streak_start = np.where(np.diff(values) != 0)[0] + 1
+    streak_start = np.insert(streak_start, 0, 0)  # Include the start
+    streak_end = np.append(streak_start[1:], len(values))  # Include the end
+
+    # Iterate through streaks and replace if length >= threshold
+    for start, end in zip(streak_start, streak_end):
+        if end - start >= threshold:
+            values[start:end] = replacement  # Replace stuck values
+
+    # Assign the modified values back to the dataset
+    dataset[var_name] = (('time',), values)
+    return dataset
+
+    
 
 if __name__ == "__main__":
     
