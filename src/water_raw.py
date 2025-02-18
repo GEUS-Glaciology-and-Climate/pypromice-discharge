@@ -10,9 +10,7 @@ import numpy as np
 import pandas as pd
 import csv
 import xarray as xr
-from pathlib import Path
 from datetime import timedelta, datetime
-from upload import dataverse_upload
 
 from argparse import ArgumentParser
 
