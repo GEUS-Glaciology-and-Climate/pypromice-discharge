@@ -705,7 +705,7 @@ if __name__ == "__main__":
     out_dir = args.out
     air_config_file = config_dir + os.sep + 'dmi_air.toml'
     
-    meta = pd.read_csv(config_dir + os.sep + 'station_meta.csv')
+    meta = pd.read_csv(config_dir + os.sep + 'station_meta.csv',sep=';')
     tx_name = meta['tx_name']
     st_name = meta['out_tx_name']
     
