@@ -365,7 +365,7 @@ def get_l3(L2):
     
     
     ds['h_wtr_comb'] = ds['h_wtr_1'].combine_first(ds['h_wtr_2']).combine_first(ds['h_wtr_3'])   
-    #ds['t_wtr_comb'] = ds['t_wtr_1'].combine_first(ds['t_wtr_2']).combine_first(ds['t_wtr_3'])   
+    ds['t_wtr_comb'] = ds['t_wtr_1'].combine_first(ds['t_wtr_2']).combine_first(ds['t_wtr_3'])   
     
     
     ds['q_wtr_comb'] = ds['q_wtr_1'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_3'])   

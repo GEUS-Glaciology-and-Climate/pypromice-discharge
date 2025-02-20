@@ -717,7 +717,7 @@ if __name__ == "__main__":
         config_file = config_dir + os.sep + f'{tx}.toml'
         ds = process(l0_dir, config_file, air_config_file, dmi_dir)
         write_csv(ds, f'{out}.csv')
-        write_txt(ds, f'{out}.txt',config_dir)
+        #write_txt(ds, f'{out}.txt',config_dir)
         write_netcdf(ds, f'{out}.nc')
     
     
