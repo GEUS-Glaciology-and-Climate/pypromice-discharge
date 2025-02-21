@@ -321,25 +321,26 @@ def get_l3(L2,st):
     ds = L2.copy(deep=True)
   
     # Calculate diver discharge
-    print('Deriving diver-only discharge...')
-    ds['q_wtr_1'] = calc_discharge(ds['h_wtr_1'])
-    # l2['q_l_h_unc'] = l2['q_l_h']*0.15 
-    ds['q_wtr_2'] = calc_discharge(ds['h_wtr_2'])
-    # l2['q_u_h_unc'] = l2['q_u_h']*0.15 
-    ds['q_wtr_3'] = calc_discharge(ds['h_wtr_3'])
-    
-    
-    ds['h_wtr_comb'] = ds['h_wtr_1'].combine_first(ds['h_wtr_2']).combine_first(ds['h_wtr_3'])   
-    #ds['t_wtr_comb'] = ds['t_wtr_1'].combine_first(ds['t_wtr_2']).combine_first(ds['t_wtr_3'])   
-    
-    
-    ds['q_wtr_comb'] = ds['q_wtr_1'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_3'])   
-    ds['q_wtr_comb_unc'] = ds['q_wtr_comb']*0.15
-    
-    # Calculate diver + temperature discharge
-    # Determined using IDL program Discharge_from_T_DMI  
-    
     if st == 'wat_br':
+        
+        print('Deriving diver-only discharge...')
+        ds['q_wtr_1'] = calc_discharge(ds['h_wtr_1'])
+        # l2['q_l_h_unc'] = l2['q_l_h']*0.15 
+        ds['q_wtr_2'] = calc_discharge(ds['h_wtr_2'])
+        # l2['q_u_h_unc'] = l2['q_u_h']*0.15 
+        ds['q_wtr_3'] = calc_discharge(ds['h_wtr_3'])
+        
+        
+        ds['h_wtr_comb'] = ds['h_wtr_1'].combine_first(ds['h_wtr_2']).combine_first(ds['h_wtr_3'])   
+        #ds['t_wtr_comb'] = ds['t_wtr_1'].combine_first(ds['t_wtr_2']).combine_first(ds['t_wtr_3'])   
+        
+        
+        ds['q_wtr_comb'] = ds['q_wtr_1'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_3'])   
+        ds['q_wtr_comb_unc'] = ds['q_wtr_comb']*0.15
+        
+        # Calculate diver + temperature discharge
+        # Determined using IDL program Discharge_from_T_DMI  
+  
         print('Deriving diver and temperature linked discharge...')
        
         ds['q_wtr_mod_spring'] = 0.17*ds['t_air_pos']**3.4
@@ -683,8 +684,6 @@ if __name__ == "__main__":
         #write_txt(ds, f'{out}.txt',config_dir)
         write_netcdf(ds, f'{out}.nc')
     
-    
-
     # Uploading to Dataverse
     
     
