@@ -20,14 +20,13 @@ from argparse import ArgumentParser
 def parse_arguments_watson():
     parser = ArgumentParser(description="watson tx l0->l3 processor")       
     parser.add_argument('-c', '--config', default=None, type=str, required=True, help='path to config files')
-    parser.add_argument('-d', '--data', default=None, type=str, required=True, help='Path to tranmissions')              
-    parser.add_argument('-dm', '--dmi', default=None, type=str, required=True, help='Path to dmi data')                          
+    parser.add_argument('-d', '--data', default=None, type=str, required=True, help='Path to tranmissions')                                     
     parser.add_argument('-o', '--out', default=None, type=str, required=True, help='path to output folder')          
     parser.add_argument('-s', '--stations', default=None, type=str, required=False, help='stations to process, if needed')          
     args = parser.parse_args()
     return args
 
-def process(inpath, config_file, air_config=None, air_inpath=None,l1=False):
+def process(inpath, config_file,st,l1=False):
     '''Perform Level 0 to Level 3 processing'''
     # assert(os.path.isfile(config_file))
     # assert(os.path.isdir(inpath))
@@ -37,22 +36,14 @@ def process(inpath, config_file, air_config=None, air_inpath=None,l1=False):
 
     # Load L0 data files
     ds_list = get_l0(config)
-    
-    # Load L0 atmospheric data
-    if air_config!=None and air_inpath!=None:
-        assert(os.path.isfile(air_config))
-        assert(os.path.isdir(air_inpath))
-        aconfig = get_config(air_config, air_inpath)
-        l0_air = get_air(aconfig)
-    else:
-        l0_air=None
+    l0_air=None
     
     # Perform processing
     
     if not l1:
-        l1 = get_l1(ds_list, config, l0_air)
-        l2 = get_l2(l1)
-        l3 = get_l3(l2)
+        l1 = get_l1(ds_list, config, l0_air,st)
+        l2 = get_l2(l1,st)
+        l3 = get_l3(l2,st)
         return l3
     else:
         l1 = get_l1(ds_list, config, l0_air,cor=False)
@@ -70,35 +61,6 @@ def get_l0(config):
                      c['last_good_data_line'])
         ds_list.append(ds)
     return ds_list
-    
-def get_air(config):  
-    '''Get atmospheric data from config file'''
-    for i, c in config.items():
-        print(f'Loading external atmospheric data from {c["file"]}...')
-        met_df = pd.read_csv(c['file'], 
-                         comment='#', 
-                         sep=';',
-                         names=c['columns'], 
-                         skiprows=c['skiprows'], 
-                         na_values= c['nodata'],
-                         skip_blank_lines=True, 
-                         engine='python'
-                         )
-    t=[]
-    for y,m,d,h in zip(list(met_df['year']), list(met_df['month']), 
-                       list(met_df['day']), list(met_df['hour'])):
-        t.append(datetime(int(y), int(m), int(d), int(h)))
-    met_df['time']=t
-    met_df = met_df.set_index('time')
-    met_df.drop(columns=['year','month','day','hour', 'SKIP_6'], inplace=True)
-    
-    # Drop SKIP columns
-    for d in met_df.columns:
-        if 'skip' in d.lower():
-            met_df.drop(columns=d, inplace=True)
-            
-    met_ds = xr.Dataset.from_dataframe(met_df)   
-    return met_ds
         
 def write_csv(ds, outfile):
     '''Write Dataset to .csv file'''
@@ -218,7 +180,7 @@ def write_netcdf(ds, filename):
             z_out.units = units[idx]
             
 """    
-def get_l1(l0_list, config, l0_air=None,cor=True):
+def get_l1(l0_list, config,st, l0_air=None,cor=True):
     '''Perform L0 to L1 processing, where input is from a list of Dataset objects
     and corresponding config toml file'''
     ds_list=[]
@@ -285,15 +247,13 @@ def get_l1(l0_list, config, l0_air=None,cor=True):
     for d in ds_list[1:]:
         l1 = l1.combine_first(d)             
   
-    if l0_air != None:
+    if st == 'wat_br':
         print('Merging external atmospheric data...')
         
         l1 = xr.merge([l1,l0_air],compat='override')
-        if hasattr(ds, 't_air_baro'):
-            l1['t_air_comb'] = xr.merge([l1['t_air_baro'], l0_air['t_air_dmi']],compat='override')
-        else:
-            l1['t_air_comb'] =  l1['t_air_dmi'] 
-        #l1 = xr.merge([l1,l0_air],compat='override')
+        if hasattr(ds, '"t_air"'):
+            l1['t_air_comb'] =  l1['t_air'] 
+        l1 = xr.merge([l1,l0_air],compat='override')
         
         
     
@@ -343,15 +303,17 @@ def get_l2(L1):
 
     # Fill air temperature gaps with interpolated values
     
-    # Fill air temperature gaps with interpolated values
-    print('Smoothing and interpolating atmospheric data...')
-    ds['t_air_interp'] = ds['t_air_comb'].interpolate_na('time', method='linear')
-    ds['t_air_smooth'] = ds['t_air_interp'].rolling(time=240).mean()
     
-    ds['t_air_pos'] = ds['t_air_smooth'].where(ds['t_air_smooth']>0, other=0)
-    ds['t_air_pos'] = ds['t_air_pos'].where(~np.isnan(ds['t_air_smooth']))
-
-    print('L2 processing complete')
+    # Fill air temperature gaps with interpolated values
+    if st == 'wat_br':
+        print('Smoothing and interpolating atmospheric data...')
+        ds['t_air_interp'] = ds['t_air_comb'].interpolate_na('time', method='linear')
+        ds['t_air_smooth'] = ds['t_air_interp'].rolling(time=240).mean()
+        
+        ds['t_air_pos'] = ds['t_air_smooth'].where(ds['t_air_smooth']>0, other=0)
+        ds['t_air_pos'] = ds['t_air_pos'].where(~np.isnan(ds['t_air_smooth']))
+    
+        print('L2 processing complete')
     return ds
     
 def get_l3(L2):
@@ -376,38 +338,40 @@ def get_l3(L2):
     
     # Calculate diver + temperature discharge
     # Determined using IDL program Discharge_from_T_DMI  
-    print('Deriving diver and temperature linked discharge...')
-   
-    ds['q_wtr_mod_spring'] = 0.17*ds['t_air_pos']**3.4
-    ds['q_wtr_mod_autumn'] = 0.31*ds['t_air_pos']**3.4
     
-    ds['q_wtr_mod_spring'] = ds['q_wtr_mod_spring'].where(ds['time.month']<=6)
-    ds['q_wtr_mod_autumn'] = ds['q_wtr_mod_autumn'].where(ds['time.month']>=7)  
-    
-    ds['q_wtr_mod_all'] = ds['q_wtr_mod_spring'].combine_first(ds['q_wtr_mod_autumn']) 
-    ds['q_wtr_ext'] = ds['q_wtr_comb'].combine_first(ds['q_wtr_mod_all'])
-    
-    ds['q_wtr_ext_unc'] = ds['q_wtr_comb_unc'].combine_first(ds['q_wtr_ext']*0.7)
-    
-    # Calculate cumulative discharge
-    print('Deriving cumulative discharge...')
-    # create an array of years (modify day/month for your use case)
-    cum_group = xr.DataArray([t.year if ((t.month <= 4) or ((t.month==4) and (t.day < 1))) else (t.year + 1) for t in ds.indexes['time']], dims='time', name='my_years', coords={'time': ds['time']})
-    
-    # use that array of years (integers) to do the groupby
-    ds['q_wtr_ext_cum'] = ds['q_wtr_ext'].groupby(cum_group).apply(lambda x: x.cumsum(dim='time', skipna=True))
-    # l2['q_ext_h_cum'] = l2['q_ext_h'].cumsum(skipna=True)
-    ds['q_wtr_ext_cum'] = ds['q_wtr_ext_cum'].where(ds['time.month'] > 4)
-    ds['q_wtr_ext_cum'] = ds['q_wtr_ext_cum'].where(ds['time.month'] < 11)
-    
-    ds['q_wtr_ext_cum_unc'] = ds['q_wtr_ext_unc'].groupby(cum_group).apply(lambda x: x.cumsum(dim='time', skipna=True))    
-    # l2['q_ext_h_cum_unc'] = l2['q_ext_h_unc'].cumsum(skipna=True)
-    ds['q_wtr_ext_cum_unc'] = ds['q_wtr_ext_cum_unc'].where(ds['time.month'] > 4)
-    ds['q_wtr_ext_cum_unc'] = ds['q_wtr_ext_cum_unc'].where(ds['time.month'] < 10)
-    
-    ds['q_wtr_ext_cum'] = ds['q_wtr_ext_cum']*1.e-9*3600. 
-    ds['q_wtr_ext_cum_unc'] = ds['q_wtr_ext_cum_unc']*1.e-9*3600.     
-    
+    if st == 'wat_br':
+        print('Deriving diver and temperature linked discharge...')
+       
+        ds['q_wtr_mod_spring'] = 0.17*ds['t_air_pos']**3.4
+        ds['q_wtr_mod_autumn'] = 0.31*ds['t_air_pos']**3.4
+        
+        ds['q_wtr_mod_spring'] = ds['q_wtr_mod_spring'].where(ds['time.month']<=6)
+        ds['q_wtr_mod_autumn'] = ds['q_wtr_mod_autumn'].where(ds['time.month']>=7)  
+        
+        ds['q_wtr_mod_all'] = ds['q_wtr_mod_spring'].combine_first(ds['q_wtr_mod_autumn']) 
+        ds['q_wtr_ext'] = ds['q_wtr_comb'].combine_first(ds['q_wtr_mod_all'])
+        
+        ds['q_wtr_ext_unc'] = ds['q_wtr_comb_unc'].combine_first(ds['q_wtr_ext']*0.7)
+        
+        # Calculate cumulative discharge
+        print('Deriving cumulative discharge...')
+        # create an array of years (modify day/month for your use case)
+        cum_group = xr.DataArray([t.year if ((t.month <= 4) or ((t.month==4) and (t.day < 1))) else (t.year + 1) for t in ds.indexes['time']], dims='time', name='my_years', coords={'time': ds['time']})
+        
+        # use that array of years (integers) to do the groupby
+        ds['q_wtr_ext_cum'] = ds['q_wtr_ext'].groupby(cum_group).apply(lambda x: x.cumsum(dim='time', skipna=True))
+        # l2['q_ext_h_cum'] = l2['q_ext_h'].cumsum(skipna=True)
+        ds['q_wtr_ext_cum'] = ds['q_wtr_ext_cum'].where(ds['time.month'] > 4)
+        ds['q_wtr_ext_cum'] = ds['q_wtr_ext_cum'].where(ds['time.month'] < 11)
+        
+        ds['q_wtr_ext_cum_unc'] = ds['q_wtr_ext_unc'].groupby(cum_group).apply(lambda x: x.cumsum(dim='time', skipna=True))    
+        # l2['q_ext_h_cum_unc'] = l2['q_ext_h_unc'].cumsum(skipna=True)
+        ds['q_wtr_ext_cum_unc'] = ds['q_wtr_ext_cum_unc'].where(ds['time.month'] > 4)
+        ds['q_wtr_ext_cum_unc'] = ds['q_wtr_ext_cum_unc'].where(ds['time.month'] < 10)
+        
+        ds['q_wtr_ext_cum'] = ds['q_wtr_ext_cum']*1.e-9*3600. 
+        ds['q_wtr_ext_cum_unc'] = ds['q_wtr_ext_cum_unc']*1.e-9*3600.     
+        
     print('L3 processing complete')
     return ds          
             
@@ -700,10 +664,8 @@ if __name__ == "__main__":
     args = parse_arguments_watson()
  
     config_dir = args.config
-    dmi_dir = args.dmi
     l0_dir = args.data
     out_dir = args.out
-    air_config_file = config_dir + os.sep + 'dmi_air.toml'
     
     meta = pd.read_csv(config_dir + os.sep + 'station_meta.csv',sep=';')
     tx_name = meta['tx_name']
@@ -715,7 +677,7 @@ if __name__ == "__main__":
     for tx,st in zip(tx_name,st_name):
         out = out_dir + os.sep + st
         config_file = config_dir + os.sep + f'{tx}.toml'
-        ds = process(l0_dir, config_file, air_config_file, dmi_dir)
+        ds = process(l0_dir, config_file,st)
         write_csv(ds, f'{out}.csv')
         #write_txt(ds, f'{out}.txt',config_dir)
         write_netcdf(ds, f'{out}.nc')
