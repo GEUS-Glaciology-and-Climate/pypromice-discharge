@@ -260,7 +260,7 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True):
     print('L1 processing complete')
     return l1
         
-def get_l2(L1):
+def get_l2(L1,st):
     '''Perform L1 to L2 processing'''
     ds = L1.copy(deep=True)   
     print('Calculating water level...')
@@ -316,7 +316,7 @@ def get_l2(L1):
         print('L2 processing complete')
     return ds
     
-def get_l3(L2):
+def get_l3(L2,st):
     '''Perform L2 to L3 processing'''
     ds = L2.copy(deep=True)
   
