@@ -251,7 +251,7 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True):
         print('Merging external atmospheric data...')
         
         l1 = xr.merge([l1,l0_air],compat='override')
-        if hasattr(ds, '"t_air"'):
+        if hasattr(ds, 't_air'):
             l1['t_air_comb'] =  l1['t_air'] 
         l1 = xr.merge([l1,l0_air],compat='override')
         
