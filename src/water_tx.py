@@ -676,6 +676,7 @@ if __name__ == "__main__":
     
     for tx,st in zip(tx_name,st_name):
         out = out_dir + os.sep + st
+        print(f'Commencing station tx processing -> Station Name: {st}')
         config_file = config_dir + os.sep + f'{tx}.toml'
         ds = process(l0_dir, config_file,st)
         write_csv(ds, f'{out}.csv')
