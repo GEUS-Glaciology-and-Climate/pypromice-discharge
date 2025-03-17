@@ -692,6 +692,34 @@ def calc_discharge(H): # Version 3 by Dirk van As
     ''' 
     return 7.50536*H**2.34002 
 
+# Function to detect stuck values and replace them with -9999
+def static_f(dataset, var_name, threshold=5, replacement=-9999):
+    values = dataset[var_name].values  # Extract the variable as a NumPy array
+    streak_start = np.where(np.diff(values) != 0)[0] + 1
+    streak_start = np.insert(streak_start, 0, 0)  # Include the start
+    streak_end = np.append(streak_start[1:], len(values))  # Include the end
+
+    # Iterate through streaks and replace if length >= threshold
+    for start, end in zip(streak_start, streak_end):
+        if end - start >= threshold:
+            values[start:end] = replacement  # Replace stuck values
+
+    # Assign the modified values back to the dataset
+    dataset[var_name] = (('time',), values)
+    return dataset
+
+def flag_f(data,flag):
+    flag_f = pd.read_csv(flag,delimiter=';')
+    for i in list(flag_f.index):
+        if hasattr(data, flag_f['variable'][i]):
+            t0 = np.datetime64(pd.to_datetime(flag_f['t0'][i],format="%d-%m-%Y %H:%M"))
+            t1 = np.datetime64(pd.to_datetime(flag_f['t1'][i],format="%d-%m-%Y %H:%M"))
+            var = flag_f['variable'][i]
+            data[var].loc[t0:t1] = -9999
+            print(f'Masking {var} in period {t0} -> {t1}')
+            
+    return data
+
 if __name__ == "__main__":
     
     args = parse_arguments_watson()
