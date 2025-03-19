@@ -7,6 +7,7 @@ Created on Wed Mar  8 11:37:47 2023
 """
 import toml, os
 import numpy as np
+import glob
 import pandas as pd
 import csv
 import xarray as xr
@@ -20,11 +21,12 @@ def parse_arguments_watson():
     parser.add_argument('-c', '--config', default=None, type=str, required=True, help='path to config files')
     parser.add_argument('-d', '--data', default=None, type=str, required=True, help='Path to tranmissions')
     parser.add_argument('-dm', '--dmi', default=None, type=str, required=True, help='Path to dmi data')                                        
-    parser.add_argument('-o', '--out', default=None, type=str, required=True, help='path to raw data')         
+    parser.add_argument('-o', '--out', default=None, type=str, required=True, help='path to raw data')     
+    parser.add_argument('-i', '--issues', default=None, type=str, required=False, help='manual flags')       
     args = parser.parse_args()
     return args
 
-def process(inpath, config_file, air_config=None, air_inpath=None,l1=False):
+def process(inpath, config_file, air_config=None, air_inpath=None,l1=False,flag=None):
     '''Perform Level 0 to Level 3 processing'''
     # assert(os.path.isfile(config_file))
     # assert(os.path.isdir(inpath))
@@ -728,7 +730,10 @@ if __name__ == "__main__":
     dmi_dir = args.dmi
     l0_dir = args.data
     out_dir = args.out
+    issues_dir = args.issues
     air_config_file = config_dir + os.sep + 'dmi_air.toml'
+    
+    flags_st = glob.glob(issues_dir + os.sep + 'flags' + os.sep + '*.csv')
     
     meta = pd.read_csv(config_dir + os.sep + 'station_meta.csv',sep=';')
     tx_name = meta['raw_name']
@@ -738,9 +743,15 @@ if __name__ == "__main__":
     print('Commencing station tx processing...')
     
     for tx,st in zip(tx_name,st_name):
+        
+        if f'{st_name}_sd' in flags_st:
+            fl = [f for f in flags_st if st_name in f][0]
+        else:
+            fl = None
+        
         out = out_dir + os.sep + st
         config_file = config_dir + os.sep + f'{tx}.toml'
-        ds = process(l0_dir, config_file, air_config_file, dmi_dir)
+        ds = process(l0_dir, config_file, air_config_file, dmi_dir,flag=fl)
         write_csv(ds, f'{out}.csv')
         write_txt(ds, f'{out}.txt',config_dir)
         write_netcdf(ds, f'{out}.nc')
