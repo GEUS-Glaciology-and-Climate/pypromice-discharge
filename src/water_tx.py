@@ -696,9 +696,9 @@ if __name__ == "__main__":
     config_dir = args.config
     l0_dir = args.data
     out_dir = args.out
-    issues_dir = args.issues
+    #issues_dir = args.issues
     
-    flags_st = glob.glob(issues_dir + os.sep + 'flags' + os.sep + '*.csv')
+    #flags_st = glob.glob(issues_dir + os.sep + 'flags' + os.sep + '*.csv')
     
     meta = pd.read_csv(config_dir + os.sep + 'station_meta.csv',sep=';')
     tx_name = meta['tx_name']
@@ -709,10 +709,10 @@ if __name__ == "__main__":
     
     for tx,st in zip(tx_name,st_name):
         
-        if f'{st_name}_tx' in flags_st:
-            fl = [f for f in flags_st if st_name in f][0]
-        else:
-            fl = None
+        #if f'{st_name}_tx' in flags_st:
+        #    fl = [f for f in flags_st if st_name in f][0]
+        #else:
+        fl = None
         
         out = out_dir + os.sep + st
         print(f'Commencing station tx processing -> Station Name: {st}')
