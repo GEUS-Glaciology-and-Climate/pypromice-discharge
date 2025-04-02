@@ -9,6 +9,7 @@ Created on Fri Jan 10 15:40:15 2025
 import toml, os
 import numpy as np
 import pandas as pd
+import netCDF4 as nc
 import csv
 import xarray as xr
 from datetime import timedelta, datetime
@@ -22,7 +23,8 @@ def parse_arguments_watson():
     parser.add_argument('-c', '--config', default=None, type=str, required=True, help='path to config files')
     parser.add_argument('-d', '--data', default=None, type=str, required=True, help='Path to tranmissions')                                     
     parser.add_argument('-o', '--out', default=None, type=str, required=True, help='path to output folder')          
-    parser.add_argument('-s', '--stations', default=None, type=str, required=False, help='stations to process, if needed')        
+    parser.add_argument('-s', '--stations', default=None, type=str, required=False, help='stations to process, if needed') 
+    parser.add_argument('-m', '--meta_out', default=None, type=str, required=False, help='path to meta file for output')        
     parser.add_argument('-i', '--issues', default=None, type=str, required=False, help='manual flags')        
     args = parser.parse_args()
     return args
@@ -114,73 +116,57 @@ def write_txt(ds,outdir,config_dir):
    
 
 
-def write_netcdf(ds, outfile):
-    '''Write Dataset to .nc file'''
-    ds.to_netcdf(outfile, mode='w', format='NETCDF4', compute=True)             
-    ds.close()
-    
-"""
-def write_netcdf(ds, filename):
+def write_netcdf(ds, outfile,meta,site):
     '''Write Dataset to .nc file'''
     
-    meta = pd.read_csv("nc_var_meta.csv")
-    title_name = meta['title']
-    names = meta["names"] 
-    longnames = meta["long_names"]
-    units = meta["units"]
-    ds_out = nc.Dataset(filename, 'w', format='NETCDF4')
+    meta_df = pd.read_csv(meta)
+    
     current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-    time_dim = ds_out.createDimension('time', len(ds.time))
-    
+    nc_out = nc.Dataset(outfile, 'w', format='NETCDF4')
+      
+    time_dim = nc_out.createDimension('time', len(ds.time))
     time_var = ds.createVariable('time', np.datetime64, ('time'), zlib=True)
-    time_var.units = 'degrees_north'
+    time_var.units = "hours since 0001-01-01 00:00:00.0"
     time_var.standard_name = 'time in YYYY-MM-DDTHH:MM:SS'
+    time_var.calendar = "gregorian"
     time_var.axis = ''
     time_var[:] = ds.time
-
-    ds_out.title = f"Hourly Hydrological Monitoring  at {title_name}, promice_discharge v. 2.1"
-    ds_out.summary = ''
-    ds_out.keywords = 'Cryosphere > Land Ice > Land Ice Albedo > Reflectance > Greenland > Northern Hemisphere > Grain Size'
-    ds_out.instrument = "OLCI"
-    ds_out.platform = "Sentinel-3A"
-    ds_out.start_date_and_time = date + "T08:00:00Z"
-    ds_out.end_date_and_time = date + "T16:00:00Z"
-    ds_out.naming_authority = "geus.dk"
     
-    ds_out.summary = ''
-    ds_out.keywords = 'Cryosphere > Land Ice > Land Ice Albedo > Reflectance > Greenland > Northern Hemisphere > Grain Size'
-    ds_out.activity = 'Space Borne Instrument'
-    ds_out.geospatial_lat_min = lat_min
-    ds_out.geospatial_lat_max = lat_max
-    ds_out.geospatial_lon_min = lon_min
-    ds_out.geospatial_lon_max = lon_max
-    ds_out.time_coverage_start = date + "T08:00:00Z"
-    ds_out.time_coverage_end = date + "T16:00:00Z"
-    ds_out.history = current_date + ' processed'
-    ds_out.date_created = current_date
-    ds_out.creator_type = "group"
-    ds_out.creator_institution = "Geological Survey of Denmark and Greenland (GEUS)"
-    ds_out.creator_email = " jeb@geus.dk, bav@geus.dk, rabni@geus.dk,adrien.wehrle@geo.uzh.ch"
-    ds_out.creator_name = "Jason Box, Baptiste Vandecrux, Rasmus Bahbah Nielsen, Adrien Wehrlé"
-    ds_out.creator_url = "https://orcid.org/0000-0003-2342-639X"
-    ds_out.institution = "Geological Survey of Denmark and Greenland (GEUS)"
-    ds_out.publisher_type = "Institute"
-    ds_out.publisher_name = "Geological Survey of Denmark and Greenland (GEUS), Glaciology and Climate Department"
-    ds_out.publisher_url = "geus.dk"
-    ds_out.publisher_email= "jeb@geus.dk"
-    ds_out.project = "Operational Sentinel-3 snow and ice products (SICE)"
-    ds_out.license = "None"
+    nc_out.title = f"Hourly Hydrological Monitoring at {site}, promice_discharge v. 2.1, Greenland Integrated Observing System (GIOS)"
+    nc_out.summary = ''
+    
+    nc_out.naming_authority = "geus.dk"
+    
+    nc_out.summary = ''
+    #nc_out.keywords = 'Cryosphere > Land Ice > Land Ice Albedo > Reflectance > Greenland > Northern Hemisphere > Grain Size'
+    nc_out.activity = 'Automatic Weather Station'
+    #nc_out.time_coverage_start = date + "T08:00:00Z"
+    #nc_out.time_coverage_end = date + "T16:00:00Z"
+    nc_out.history = current_date + ' processed'
+    nc_out.date_created = current_date
+    nc_out.creator_type = "group"
+    nc_out.creator_institution = "Geological Survey of Denmark and Greenland (GEUS)"
+    nc_out.creator_email = "kkk@geus.dk, rabni@geus.dk, maclu@geus.dk"
+    nc_out.creator_name = "Kristian Kjellerup Kjeldsen, Rasmus Bahbah Nielsen, Mads Christian Lund"
+    nc_out.institution = "Geological Survey of Denmark and Greenland (GEUS)"
+    nc_out.publisher_type = "Institute"
+    nc_out.publisher_name = "Geological Survey of Denmark and Greenland (GEUS), Glaciology and Climate Department"
+    nc_out.publisher_url = "geus.dk"
+    nc_out.publisher_email= "kkk@geus.dk"
+    nc_out.project = "Greenland Integrated Observing System (GIOS)"
+    nc_out.license = "None"
     
     for v in ds: 
-        if v in names:
-            idx = names.index(v)
-            z_out = ds.createVariable(v, 'f4', ('time'),zlib=True)
+        if v in meta_df['variable']:
+            idx = meta_df['variable'].index(v)
+            z_out = nc_out.createVariable(v, 'f4', ('time'),zlib=True)
             z_out[:] = ds[v].to_numpy()
-            z_out.standard_name = v
-            z_out.long_name = longnames[idx]
-            z_out.units = units[idx]
+            z_out.standard_name = meta_df['standard_name'][idx]
+            z_out.long_name = meta_df['long_name'][idx]
+            z_out.units = meta_df['units'][idx]
             
-"""    
+    nc_out.close()
+    
 def get_l1(l0_list, config,st, l0_air=None,cor=True):
     '''Perform L0 to L1 processing, where input is from a list of Dataset objects
     and corresponding config toml file'''
@@ -692,7 +678,8 @@ def flag_f(data,flag):
 if __name__ == "__main__":
     
     args = parse_arguments_watson()
- 
+    
+    proc_meta_out = args.meta_out
     config_dir = args.config
     l0_dir = args.data
     out_dir = args.out
@@ -703,11 +690,12 @@ if __name__ == "__main__":
     meta = pd.read_csv(config_dir + os.sep + 'station_meta.csv',sep=';')
     tx_name = meta['tx_name']
     st_name = meta['out_tx_name']
+    site_names = meta['site_name']
     
     # Bridge station site raw data processing
     print('Commencing station tx processing...')
     
-    for tx,st in zip(tx_name,st_name):
+    for tx,st,site in zip(tx_name,st_name,site_names):
         
         #if f'{st_name}_tx' in flags_st:
         #    fl = [f for f in flags_st if st_name in f][0]
@@ -720,7 +708,7 @@ if __name__ == "__main__":
         ds = process(l0_dir, config_file,st,flag=fl)
         write_csv(ds, f'{out}.csv')
         #write_txt(ds, f'{out}.txt',config_dir)
-        write_netcdf(ds, f'{out}.nc')
+        write_netcdf(ds, f'{out}.nc',proc_meta_out,site)
     
     # Uploading to Dataverse
     

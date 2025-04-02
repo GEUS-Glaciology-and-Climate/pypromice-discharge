@@ -1,0 +1,19 @@
+variable,standard_name,long_name,units
+t_air,air_temperature,Air Temperature,degrees_C
+rh_air,relative_humidity,Relative Humidty,%
+p_air,air_pressure,Air Pressure,hPa
+p_wtr_1,water_pressure,Water Pressure (PTA 1),hPa
+p_wtr_2,water_pressure,Water Pressure (PTA 2),hPa
+p_wtr_3,water_pressure,Water Pressure (PTA 3),hPa
+precip_cum,precipitation,Precipitation (Cumulative),mm
+batt_v,battery_voltage,Battery Voltage,V
+h_dvr_1,diver_height,Diver Height (PTA 1),m
+h_dvr_2,diver_height,Diver Height (PTA 2),m
+h_dvr_3,diver_height,Diver Height (PTA 3),m
+p_wtr_1_cor,water_pressure_corrected,Water Pressure (PTA 1) Corrected,hPa
+p_wtr_2_cor,water_pressure_corrected,Water Pressure (PTA 2) Corrected,hPa
+p_wtr_3_cor,water_pressure_corrected,Water Pressure (PTA 3) Corrected,hPa
+h_wtr_1,water level,Water Level (PTA 1),m
+h_wtr_2,water level,Water Level (PTA 2),m
+h_wtr_3,water level,Water Level (PTA 3),m
+p_air_baro_cor,air_pressure_corrected,Air Pressure Corrected,hPa
