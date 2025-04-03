@@ -116,7 +116,7 @@ def write_txt(ds,outdir,config_dir):
    
 
 
-def write_netcdf(ds, outfile,meta,site):
+def write_netcdf(ds, outfile,meta,site,loc=None):
     '''Write Dataset to .nc file'''
     
     meta_df = pd.read_csv(meta)
@@ -132,6 +132,24 @@ def write_netcdf(ds, outfile,meta,site):
     time_var.axis = ''
     time_var[:] = ds.time
     
+    
+    if loc:
+        lat_v = nc_out.createVariable('lat', 'f4',zlib=True)
+        lon_v = nc_out.createVariable('lon', 'f4',zlib=True)
+        
+        lat_v.standard_name = "latitude";
+        lat_v.long_name = "station latitude" ;
+        lat_v.units = "degrees_north" ;
+        lat_v.axis = "Y"
+        lat_v[:] = loc[0]
+        
+        lon_v.standard_name = "longitude";
+        lon_v.long_name = "Station Longitude" ;
+        lon_v.units = "degrees_east" ;
+        lon_v.axis = "X"
+        lon_v[:] = loc[1]
+        
+    
     nc_out.title = f"Hourly Hydrological Monitoring at {site}, promice_discharge v. 2.1, Greenland Integrated Observing System (GIOS)"
     nc_out.summary = ''
     
@@ -146,8 +164,8 @@ def write_netcdf(ds, outfile,meta,site):
     nc_out.date_created = current_date
     nc_out.creator_type = "group"
     nc_out.creator_institution = "Geological Survey of Denmark and Greenland (GEUS)"
-    nc_out.creator_email = "kkk@geus.dk, rabni@geus.dk, maclu@geus.dk"
-    nc_out.creator_name = "Kristian Kjellerup Kjeldsen, Rasmus Bahbah Nielsen, Mads Christian Lund"
+    nc_out.creator_email = "kkk@geus.dk, rabni@geus.dk, pho@geus.dk ,maclu@geus.dk"
+    nc_out.creator_name = "Kristian Kjellerup Kjeldsen, Rasmus Bahbah Nielsen, Penelope How ,Mads Christian Lund"
     nc_out.institution = "Geological Survey of Denmark and Greenland (GEUS)"
     nc_out.publisher_type = "Institute"
     nc_out.publisher_name = "Geological Survey of Denmark and Greenland (GEUS), Glaciology and Climate Department"
@@ -688,6 +706,7 @@ if __name__ == "__main__":
     #flags_st = glob.glob(issues_dir + os.sep + 'flags' + os.sep + '*.csv')
     
     meta = pd.read_csv(config_dir + os.sep + 'station_meta.csv',sep=';')
+    locations = list(zip(meta['latitude'],meta['longitude']))
     tx_name = meta['tx_name']
     st_name = meta['out_tx_name']
     site_names = meta['site_name']
@@ -695,7 +714,7 @@ if __name__ == "__main__":
     # Bridge station site raw data processing
     print('Commencing station tx processing...')
     
-    for tx,st,site in zip(tx_name,st_name,site_names):
+    for tx,st,site,loc in zip(tx_name,st_name,site_names,locations):
         
         #if f'{st_name}_tx' in flags_st:
         #    fl = [f for f in flags_st if st_name in f][0]
@@ -708,7 +727,7 @@ if __name__ == "__main__":
         ds = process(l0_dir, config_file,st,flag=fl)
         write_csv(ds, f'{out}.csv')
         #write_txt(ds, f'{out}.txt',config_dir)
-        write_netcdf(ds, f'{out}.nc',proc_meta_out,site)
+        write_netcdf(ds, f'{out}.nc',proc_meta_out,site,loc=loc)
     
     # Uploading to Dataverse
     
