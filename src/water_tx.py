@@ -706,6 +706,10 @@ if __name__ == "__main__":
     
     # Bridge station site raw data processing
     print('Commencing station tx processing...')
+    time_steps = ['10min','hourly','daily']
+    resample = [None,'1H','1D']
+    # Bridge station site raw data processing
+    print('Commencing station tx processing...')
     
     for tx,st in zip(tx_name,st_name):
         
@@ -718,12 +722,18 @@ if __name__ == "__main__":
         print(f'Commencing station tx processing -> Station Name: {st}')
         config_file = config_dir + os.sep + f'{tx}.toml'
         ds = process(l0_dir, config_file,st,flag=fl)
-        write_csv(ds, f'{out}.csv')
-        #write_txt(ds, f'{out}.txt',config_dir)
-        write_netcdf(ds, f'{out}.nc')
-    
-    # Uploading to Dataverse
-    
+        
+        for ts,rs in zip(time_steps,resample):
+            
+            if rs:
+                ds_resample = ds.resample(time=rs).mean()
+                print(f'Resampling station tx data into a {ts} file')
+            else:
+                ds_resample = ds.copy()
+                
+            write_csv(ds_resample, f'{out}_{ts}.csv')
+            #write_txt(ds, f'{out}.txt',config_dir)
+            write_netcdf(ds_resample, f'{out}_{ts}.nc')
     
     
     
