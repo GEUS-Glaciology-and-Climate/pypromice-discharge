@@ -54,13 +54,14 @@ def get_l0(config):
     ds_list=[]
     for i, c in config.items(): 
         print(f'Loading {c["file"]}')
-        ds = load_l0(c['file'], 
-                     c['columns'],
-                     c['skiprows'],
-                     c['nodata'],
-                     c['format'],
-                     c['last_good_data_line'])
-        ds_list.append(ds)
+        if os.path.isfile(c['file']):
+            ds = load_l0(c['file'], 
+                         c['columns'],
+                         c['skiprows'],
+                         c['nodata'],
+                         c['format'],
+                         c['last_good_data_line'])
+            ds_list.append(ds)
     return ds_list
         
 def write_csv(ds, outfile):
