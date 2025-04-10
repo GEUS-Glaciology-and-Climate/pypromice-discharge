@@ -718,7 +718,13 @@ if __name__ == "__main__":
         #else:
         fl = None
         
-        out = out_dir + os.sep + st
+        out_st_dir = out_dir + os.sep + st
+        
+        if not os.path.exists(out_st_dir):
+            os.mkdir(out_st_dir)
+            
+        out = out_st_dir + os.sep + st
+        
         print(f'Commencing station tx processing -> Station Name: {st}')
         config_file = config_dir + os.sep + f'{tx}.toml'
         ds = process(l0_dir, config_file,st,flag=fl)
