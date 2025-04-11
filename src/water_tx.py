@@ -13,7 +13,6 @@ import csv
 import xarray as xr
 from datetime import timedelta, datetime
 import glob
-
 from argparse import ArgumentParser
 
 
@@ -27,7 +26,7 @@ def parse_arguments_watson():
     args = parser.parse_args()
     return args
 
-def process(inpath, config_file,st,l1=False,flag=None):
+def process(inpath, config_file,st,l1=False,flag=None,ts='10min'):
     '''Perform Level 0 to Level 3 processing'''
     # assert(os.path.isfile(config_file))
     # assert(os.path.isdir(inpath))
@@ -42,7 +41,7 @@ def process(inpath, config_file,st,l1=False,flag=None):
     # Perform processing
     
     if not l1:
-        l1 = get_l1(ds_list, config,st)
+        l1 = get_l1(ds_list, config,st,ts=ts)
         l2 = get_l2(l1,st)
         l3 = get_l3(l2,st)
         return l3
@@ -182,7 +181,7 @@ def write_netcdf(ds, filename):
             z_out.units = units[idx]
             
 """    
-def get_l1(l0_list, config,st, l0_air=None,cor=True):
+def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
     '''Perform L0 to L1 processing, where input is from a list of Dataset objects
     and corresponding config toml file'''
     ds_list=[]
@@ -240,7 +239,7 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True):
                 ds['p_air_baro_cor'] = offset_press(ds['p_air_baro'], c['p_offset_a'])
   
         # Resample to hourly mean values
-        ds = resample_data(ds, '60min')
+        ds = resample_data(ds, ts)
         ds_list.append(ds) 
 
     # Combine all files
@@ -697,10 +696,11 @@ if __name__ == "__main__":
     config_dir = args.config
     l0_dir = args.data
     out_dir = args.out
+    
     #issues_dir = args.issues
     
     #flags_st = glob.glob(issues_dir + os.sep + 'flags' + os.sep + '*.csv')
-    
+    print(config_dir)
     meta = pd.read_csv(config_dir + os.sep + 'station_meta.csv',sep=';')
     tx_name = meta['tx_name']
     st_name = meta['out_tx_name']
@@ -708,10 +708,10 @@ if __name__ == "__main__":
     # Bridge station site raw data processing
     print('Commencing station tx processing...')
     time_steps = ['10min','hourly','daily']
-    resample = [None,'1H','1D']
+    resample = ['10min','60min','1440min']
     # Bridge station site raw data processing
     print('Commencing station tx processing...')
-    
+   
     for tx,st in zip(tx_name,st_name):
         
         #if f'{st_name}_tx' in flags_st:
@@ -728,19 +728,24 @@ if __name__ == "__main__":
         
         print(f'Commencing station tx processing -> Station Name: {st}')
         config_file = config_dir + os.sep + f'{tx}.toml'
-        ds = process(l0_dir, config_file,st,flag=fl)
         
         for ts,rs in zip(time_steps,resample):
+            ds = process(l0_dir, config_file,st,flag=fl,ts=rs)
             
-            if rs:
-                ds_resample = ds.resample(time=rs).mean()
-                print(f'Resampling station tx data into a {ts} file')
-            else:
-                ds_resample = ds.copy()
-                
-            write_csv(ds_resample, f'{out}_{ts}.csv')
+            write_csv(ds, f'{out}_{ts}.csv')
             #write_txt(ds, f'{out}.txt',config_dir)
-            write_netcdf(ds_resample, f'{out}_{ts}.nc')
-    
+            write_netcdf(ds, f'{out}_{ts}.nc')
+            
+            # if rs:
+            #     print(f'Resampling station tx data into a {ts} file')
+            #     #ds_resample = ds.resample(time=rs).mean()
+            #     ds_resample = resample_data(ds, ts)
+            # else:
+            #     ds_resample = ds.copy()
+       
+        
+        
+                
+            
     
     
