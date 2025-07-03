@@ -237,18 +237,21 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
             
             # Apply pressure offset, also apply to p_wtr_l, p_air
             if hasattr(ds, 'p_wtr_1'):
-                if c['pls_m'] == 'current' and st == 'wat_br':
-                    ds['p_wtr_1'] = to_pressure(ds['p_wtr_1']-c['current_offset_1'])
+                if st == 'wat_br':
+                    if c['pls_m'] == 'current':
+                        ds['p_wtr_1'] = to_pressure(ds['p_wtr_1']-c['current_offset_1'])
                 ds['p_wtr_1_cor'] = offset_press(ds['p_wtr_1'], c['p_offset_1'])
             if hasattr(ds, 'p_wtr_2'): 
-                if c['pls_m'] == 'current' and st == 'wat_br':
-                    ds['p_wtr_2'] = to_pressure(ds['p_wtr_2']-c['current_offset_2'])
+                if st == 'wat_br':
+                    if c['pls_m'] == 'current':
+                        ds['p_wtr_2'] = to_pressure(ds['p_wtr_2']-c['current_offset_2'])
                         
                 ds['p_wtr_2_cor'] = offset_press(ds['p_wtr_2'], c['p_offset_2']) 
                 ds['p_wtr_2_cor'] = ds['p_wtr_2_cor'].where(ds['p_wtr_2_cor'] != 1450.0)
             if hasattr(ds, 'p_wtr_3'): 
-                if c['pls_m'] == 'current' and st == 'wat_br':
-                    ds['p_wtr_3'] = to_pressure(ds['p_wtr_3']-c['current_offset_3'])
+                if st == 'wat_br':
+                    if c['pls_m'] == 'current':
+                        ds['p_wtr_3'] = to_pressure(ds['p_wtr_3']-c['current_offset_3'])
                 ds['p_wtr_3_cor'] = offset_press(ds['p_wtr_3'], c['p_offset_3']) 
                 ds['p_wtr_3_cor'] = ds['p_wtr_3_cor'].where(ds['p_wtr_3_cor'] != 1450.0)
             if hasattr(ds, 'p_air_baro'):
