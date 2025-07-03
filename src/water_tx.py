@@ -247,6 +247,7 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
                     plsm = c['pls_m']
                     print(f'What unit does PLS_M HAVE {plsm}')
                     if c['pls_m'] == 'current':
+                        print(f'WE ARE GOING TO PRESSURE')
                         ds['p_wtr_2'] = to_pressure(ds['p_wtr_2']-c['current_offset_2'])
                         
                 ds['p_wtr_2_cor'] = offset_press(ds['p_wtr_2'], c['p_offset_2']) 
@@ -690,10 +691,8 @@ def to_pressure(var):
     - xr.DataArray: Transformed DataArray with pressure applied after 2025-05-01.
     """
 
-    # Copy original variable
-    var_out = var.copy()
 
-    return (125 * var_out) - 500
+    return (125 * var) - 500
 
 # Function to detect stuck values and replace them with -9999
 def static_f(dataset, var_name, threshold=5, replacement=-9999):
