@@ -252,6 +252,7 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
                         print(ds['p_wtr_2'])
                         ds['p_wtr_2'] = to_pressure(ds['p_wtr_2']-c['current_offset_2'])
                         print('p_wtr_2 after to pressure')
+                        print(ds['p_wtr_2'])
                 ds['p_wtr_2_cor'] = offset_press(ds['p_wtr_2'], c['p_offset_2']) 
                 ds['p_wtr_2_cor'] = ds['p_wtr_2_cor'].where(ds['p_wtr_2_cor'] != 1450.0)
             if hasattr(ds, 'p_wtr_3'): 
