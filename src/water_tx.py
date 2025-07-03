@@ -63,6 +63,14 @@ def get_l0(config):
             ds_list.append(ds)
     return ds_list
         
+
+def ref_correction(ds):
+    ''' Correction of water level to VanEssen-1 (made from linear regressions in 2023 and 2024) '''
+    ds['h_wtr_2'] =  1.0068 * ds['h_wtr_2']  + 0.1129
+    ds['h_wtr_3'] =  0.9960 * ds['h_wtr_3'] + 0.3320 
+    
+    return ds
+
 def write_csv(ds, outfile):
     '''Write Dataset to .csv file'''
     df = ds.to_dataframe()
@@ -199,6 +207,7 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
         # Apply time offset
         ds['time'] = offset_time(ds['time'], c['utc_offset'])
         
+        
         if cor:
             if 'analog_dvr_scale' in c: 
                 if 'h_wtr_1' in ds:
@@ -228,11 +237,21 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
             
             # Apply pressure offset, also apply to p_wtr_l, p_air
             if hasattr(ds, 'p_wtr_1'):
+                if 'pls_m' in c:
+                    if c['pls_m'] == 'current':
+                        ds['p_wtr_1'] = to_pressure(ds['p_wtr_1']-c['current_offset_1'])
                 ds['p_wtr_1_cor'] = offset_press(ds['p_wtr_1'], c['p_offset_1'])
             if hasattr(ds, 'p_wtr_2'): 
+                if 'pls_m' in c:
+                    if c['pls_m'] == 'current':
+                        ds['p_wtr_2'] = to_pressure(ds['p_wtr_2']-c['current_offset_2'])
+                        
                 ds['p_wtr_2_cor'] = offset_press(ds['p_wtr_2'], c['p_offset_2']) 
                 ds['p_wtr_2_cor'] = ds['p_wtr_2_cor'].where(ds['p_wtr_2_cor'] != 1450.0)
             if hasattr(ds, 'p_wtr_3'): 
+                if 'pls_m' in c:
+                    if c['pls_m'] == 'current':
+                        ds['p_wtr_3'] = to_pressure(ds['p_wtr_3']-c['current_offset_3'])
                 ds['p_wtr_3_cor'] = offset_press(ds['p_wtr_3'], c['p_offset_3']) 
                 ds['p_wtr_3_cor'] = ds['p_wtr_3_cor'].where(ds['p_wtr_3_cor'] != 1450.0)
             if hasattr(ds, 'p_air_baro'):
@@ -240,7 +259,7 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
   
         # Resample to hourly mean values
         ds = resample_data(ds, ts)
-        ds_list.append(ds) 
+        ds_list.append(ds)
 
     # Combine all files
     print('Combining files into single L1 object...')
@@ -275,7 +294,6 @@ def get_l2(L1,st):
     # Calculate water level with air pressure adjustment (p = H rho g)                
     # Perform this only if p_wtr_l_cor-p_air_cor > p_dif_min and t_wtr_l_cor > t_wtr_min:    
     ds['h_wtr_1'] = calc_water_level(ds['p_wtr_1_cor'], 
-                                   ds['p_air_baro_cor'], 
                                    ds['h_dvr_1'])      
   
     # adding the raw water level data to the file
@@ -291,7 +309,6 @@ def get_l2(L1,st):
     # Perform this only if p_wtr_u_cor-p_air_cor > p_dif_min and t_wtr_u_cor > t_wtr_min:
    
     ds['h_wtr_2'] = calc_water_level(ds['p_wtr_2_cor'], 
-                                   ds['p_air_baro_cor'],
                                    ds['h_dvr_2'])
     # adding the raw water level data to the file
     if raw_l2 is not None:
@@ -299,8 +316,9 @@ def get_l2(L1,st):
     
     
     ds['h_wtr_3'] = calc_water_level(ds['p_wtr_3_cor'],
-                                   ds['p_air_baro_cor'],
                                    ds['h_dvr_3'])
+    
+    ds = ref_correction(ds)
 
     # Fill air temperature gaps with interpolated values
     
@@ -348,7 +366,7 @@ def get_l3(L2,st):
         ds['q_wtr_mod_autumn'] = 0.31*ds['t_air_pos']**3.4
         
         ds['q_wtr_mod_spring'] = ds['q_wtr_mod_spring'].where(ds['time.month']<=6)
-        ds['q_wtr_mod_autumn'] = ds['q_wtr_mod_autumn'].where(ds['time.month']>=7)  
+        ds['q_wtr_mod_autumn'] = ds['q_wtr_mod_autumn'].where(ds['time.month']>=7)
         
         ds['q_wtr_mod_all'] = ds['q_wtr_mod_spring'].combine_first(ds['q_wtr_mod_autumn']) 
         ds['q_wtr_ext'] = ds['q_wtr_comb'].combine_first(ds['q_wtr_mod_all'])
@@ -614,7 +632,7 @@ def resample_data(ds, t):
            coords={'time':df.index}, attrs=ds[c].attrs) for c in df.columns]
     return xr.Dataset(dict(zip(df.columns,vals)), attrs=ds.attrs)      
 
-def calc_water_level(p_wtr, p_air, h_dvr, p_dif_min=5., t_wtr_min=-100.):
+def calc_water_level(p_wtr, h_dvr):
     '''Calculate water level with air pressure adjustment. Water temperature
     thresholding is currently not used in this calculation
 
@@ -640,10 +658,7 @@ def calc_water_level(p_wtr, p_air, h_dvr, p_dif_min=5., t_wtr_min=-100.):
 
     '''
    
-    
-    diff = p_wtr - p_air  
-    diff = diff.where(diff > p_dif_min) 
-    return h_dvr + (diff/98.2) 
+    return h_dvr + (p_wtr/98.2) 
        
 def calc_discharge(H): # Version 3 by Dirk van As
     '''Calculate diver discharge. This is lifted directly from the IDL 
@@ -660,6 +675,22 @@ def calc_discharge(H): # Version 3 by Dirk van As
         Discharge array
     ''' 
     return 7.50536*H**2.34002 
+
+def to_pressure(var):
+    """
+    Converts a variable to pressure using the formula (125 * x) - 500
+
+    Parameters:
+    - var (xr.DataArray): Input xarray variable with a 'time' coordinate.
+
+    Returns:
+    - xr.DataArray: Transformed DataArray with pressure applied after 2025-05-01.
+    """
+
+    # Copy original variable
+    var_out = var.copy()
+
+    return (125 * var_out) - 500
 
 # Function to detect stuck values and replace them with -9999
 def static_f(dataset, var_name, threshold=5, replacement=-9999):
