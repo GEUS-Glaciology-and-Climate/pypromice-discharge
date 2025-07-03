@@ -238,6 +238,8 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
             # Apply pressure offset, also apply to p_wtr_l, p_air
             if hasattr(ds, 'p_wtr_1'):
                 if st == 'wat_br':
+                    plsm = c['pls_m']
+                    print(f'What unit does PLS_M HAVE {plsm}')
                     if c['pls_m'] == 'current':
                         ds['p_wtr_1'] = to_pressure(ds['p_wtr_1']-c['current_offset_1'])
                 ds['p_wtr_1_cor'] = offset_press(ds['p_wtr_1'], c['p_offset_1'])
