@@ -361,7 +361,9 @@ def get_l3(L2,st):
         #ds['t_wtr_comb'] = ds['t_wtr_1'].combine_first(ds['t_wtr_2']).combine_first(ds['t_wtr_3'])   
         
         
-        ds['q_wtr_comb'] = ds['q_wtr_1'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_3'])   
+        #ds['q_wtr_comb'] = ds['q_wtr_1'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_3'])   
+        ds['q_wtr_comb'] = ds['q_wtr_3'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_1'])
+        
         ds['q_wtr_comb_unc'] = ds['q_wtr_comb']*0.15
         
         # Calculate diver + temperature discharge
