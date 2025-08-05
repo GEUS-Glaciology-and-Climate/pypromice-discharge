@@ -13,6 +13,7 @@ import csv
 import xarray as xr
 from datetime import timedelta, datetime
 import glob
+import netCDF4 as nc
 from argparse import ArgumentParser
 
 
@@ -122,61 +123,40 @@ def write_txt(ds,outdir,config_dir):
    
 
 
-def write_netcdf(ds, outfile):
-    '''Write Dataset to .nc file'''
-    ds.to_netcdf(outfile, mode='w', format='NETCDF4', compute=True)             
-    ds.close()
+# def write_netcdf(ds, outfile,meta_nc_dict,st):
+#     '''Write Dataset to .nc file'''
+#     ds.to_netcdf(outfile, mode='w', format='NETCDF4', compute=True)             
+#     ds.close()
     
-"""
-def write_netcdf(ds, filename):
+
+def write_netcdf(ds, outfile,meta_nc_dict,st):
     '''Write Dataset to .nc file'''
     
-    meta = pd.read_csv("nc_var_meta.csv")
-    title_name = meta['title']
-    names = meta["names"] 
-    longnames = meta["long_names"]
-    units = meta["units"]
-    ds_out = nc.Dataset(filename, 'w', format='NETCDF4')
+    names = meta_nc_dict["var_name"] 
+    longnames = meta_nc_dict["var_long"]
+    units = meta_nc_dict["units"]
+    ds_out = nc.Dataset(outfile, 'w', format='NETCDF4')
     current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     time_dim = ds_out.createDimension('time', len(ds.time))
-    
-    time_var = ds.createVariable('time', np.datetime64, ('time'), zlib=True)
-    time_var.units = 'degrees_north'
+    time_var = ds_out.createVariable('time', np.datetime64, ('time'), zlib=True)
     time_var.standard_name = 'time in YYYY-MM-DDTHH:MM:SS'
     time_var.axis = ''
     time_var[:] = ds.time
 
-    ds_out.title = f"Hourly Hydrological Monitoring  at {title_name}, promice_discharge v. 2.1"
-    ds_out.summary = ''
-    ds_out.keywords = 'Cryosphere > Land Ice > Land Ice Albedo > Reflectance > Greenland > Northern Hemisphere > Grain Size'
-    ds_out.instrument = "OLCI"
-    ds_out.platform = "Sentinel-3A"
-    ds_out.start_date_and_time = date + "T08:00:00Z"
-    ds_out.end_date_and_time = date + "T16:00:00Z"
+    ds_out.title = f"Hourly Hydrological Monitoring at {st}, promice_discharge v. 2.1"
     ds_out.naming_authority = "geus.dk"
     
-    ds_out.summary = ''
-    ds_out.keywords = 'Cryosphere > Land Ice > Land Ice Albedo > Reflectance > Greenland > Northern Hemisphere > Grain Size'
-    ds_out.activity = 'Space Borne Instrument'
-    ds_out.geospatial_lat_min = lat_min
-    ds_out.geospatial_lat_max = lat_max
-    ds_out.geospatial_lon_min = lon_min
-    ds_out.geospatial_lon_max = lon_max
-    ds_out.time_coverage_start = date + "T08:00:00Z"
-    ds_out.time_coverage_end = date + "T16:00:00Z"
-    ds_out.history = current_date + ' processed'
     ds_out.date_created = current_date
     ds_out.creator_type = "group"
     ds_out.creator_institution = "Geological Survey of Denmark and Greenland (GEUS)"
-    ds_out.creator_email = " jeb@geus.dk, bav@geus.dk, rabni@geus.dk,adrien.wehrle@geo.uzh.ch"
-    ds_out.creator_name = "Jason Box, Baptiste Vandecrux, Rasmus Bahbah Nielsen, Adrien Wehrlé"
-    ds_out.creator_url = "https://orcid.org/0000-0003-2342-639X"
+    ds_out.creator_email = " kkk@geus.dk, rabni@geus.dk"
+    ds_out.creator_name = "Kristian Kjellerup Kjeldsen, Rasmus Bahbah Nielsen"
     ds_out.institution = "Geological Survey of Denmark and Greenland (GEUS)"
     ds_out.publisher_type = "Institute"
     ds_out.publisher_name = "Geological Survey of Denmark and Greenland (GEUS), Glaciology and Climate Department"
     ds_out.publisher_url = "geus.dk"
-    ds_out.publisher_email= "jeb@geus.dk"
-    ds_out.project = "Operational Sentinel-3 snow and ice products (SICE)"
+    ds_out.publisher_email= "kkk@geus.dk"
+    ds_out.project = "Greenland Integrated Observing System (GIOS)"
     ds_out.license = "None"
     
     for v in ds: 
@@ -188,7 +168,7 @@ def write_netcdf(ds, filename):
             z_out.long_name = longnames[idx]
             z_out.units = units[idx]
             
-"""    
+    
 def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
     '''Perform L0 to L1 processing, where input is from a list of Dataset objects
     and corresponding config toml file'''
@@ -740,6 +720,7 @@ if __name__ == "__main__":
     #flags_st = glob.glob(issues_dir + os.sep + 'flags' + os.sep + '*.csv')
     print(config_dir)
     meta = pd.read_csv(config_dir + os.sep + 'station_meta.csv',sep=';')
+    meta_nc_dict = pd.read_excel(config_dir + os.sep +'meta_nc.xlsx', sheet_name=None)
     tx_name = meta['tx_name']
     st_name = meta['out_tx_name']
     
@@ -772,7 +753,7 @@ if __name__ == "__main__":
             
             write_csv(ds, f'{out}_{ts}.csv')
             #write_txt(ds, f'{out}.txt',config_dir)
-            write_netcdf(ds, f'{out}_{ts}.nc')
+            write_netcdf(ds, f'{out}_{ts}.nc',meta_nc_dict[st],st)
             
             # if rs:
             #     print(f'Resampling station tx data into a {ts} file')
