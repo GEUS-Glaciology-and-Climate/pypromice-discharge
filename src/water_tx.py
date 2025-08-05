@@ -170,17 +170,14 @@ def write_netcdf(ds, outfile,meta_nc_dict,st):
     ds_out.project = "Greenland Integrated Observing System (GIOS)"
     ds_out.license = "None"
     
-    print('names:')
-    print(list(names))
     for v in ds: 
-        print(v)
-        if v in names:
-            idx = names.index(v)
+        if v in list(names):
+            idx = list(names).index(v)
             z_out = ds.createVariable(v, 'f4', ('time'),zlib=True)
             z_out[:] = ds[v].to_numpy()
             z_out.standard_name = v
-            z_out.long_name = longnames[idx]
-            z_out.units = units[idx]
+            z_out.long_name = list(longnames)[idx]
+            z_out.units = list(units)[idx]
     ds_out.close()
             
     
