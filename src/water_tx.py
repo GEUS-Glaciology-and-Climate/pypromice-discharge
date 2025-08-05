@@ -13,7 +13,7 @@ import csv
 import xarray as xr
 from datetime import timedelta, datetime
 import glob
-import netCDF4 as nc
+from netCDF4 import Dataset, date2num
 from argparse import ArgumentParser
 
 
@@ -135,14 +135,25 @@ def write_netcdf(ds, outfile,meta_nc_dict,st):
     names = meta_nc_dict["var_name"] 
     longnames = meta_nc_dict["var_long"]
     units = meta_nc_dict["units"]
-    ds_out = nc.Dataset(outfile, 'w', format='NETCDF4')
+    ds_out = Dataset(outfile, 'w', format='NETCDF4')
     current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    
+    # Create time dimension
     time_dim = ds_out.createDimension('time', len(ds.time))
-    time_var = ds_out.createVariable('time', np.datetime64, ('time'), zlib=True)
-    time_var.standard_name = 'time in YYYY-MM-DDTHH:MM:SS'
-    time_var.axis = ''
-    time_var[:] = ds.time
-
+    
+    # Create time variable (as float64)
+    time_var = ds_out.createVariable('time', 'f8', ('time',), zlib=True)
+    
+    # Use CF-convention
+    time_origin = "seconds since 1970-01-01 00:00:00"
+    time_var.units = time_origin
+    time_var.standard_name = 'time'
+    time_var.calendar = 'standard'
+    
+    # Convert time values
+    time_values = pd.to_datetime(ds.time.values)
+    time_var[:] = date2num(time_values.to_pydatetime(), units=time_origin)
+    
     ds_out.title = f"Hourly Hydrological Monitoring at {st}, promice_discharge v. 2.1"
     ds_out.naming_authority = "geus.dk"
     
@@ -167,6 +178,7 @@ def write_netcdf(ds, outfile,meta_nc_dict,st):
             z_out.standard_name = v
             z_out.long_name = longnames[idx]
             z_out.units = units[idx]
+    ds_out.close()
             
     
 def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
