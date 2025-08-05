@@ -173,7 +173,7 @@ def write_netcdf(ds, outfile,meta_nc_dict,st):
     for v in ds: 
         if v in list(names):
             idx = list(names).index(v)
-            z_out = ds.createVariable(v, 'f4', ('time'),zlib=True)
+            z_out = ds_out.createVariable(v, 'f4', ('time'),zlib=True)
             z_out[:] = ds[v].to_numpy()
             z_out.standard_name = v
             z_out.long_name = list(longnames)[idx]
