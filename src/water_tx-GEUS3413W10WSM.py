@@ -13,7 +13,7 @@ import csv
 import xarray as xr
 from datetime import timedelta, datetime
 import glob
-from netCDF4 import Dataset, date2num
+
 from argparse import ArgumentParser
 
 
@@ -27,7 +27,7 @@ def parse_arguments_watson():
     args = parser.parse_args()
     return args
 
-def process(inpath, config_file,st,l1=False,flag=None,ts='10min'):
+def process(inpath, config_file,st,l1=False,flag=None):
     '''Perform Level 0 to Level 3 processing'''
     # assert(os.path.isfile(config_file))
     # assert(os.path.isdir(inpath))
@@ -42,7 +42,7 @@ def process(inpath, config_file,st,l1=False,flag=None,ts='10min'):
     # Perform processing
     
     if not l1:
-        l1 = get_l1(ds_list, config,st,ts=ts)
+        l1 = get_l1(ds_list, config,st)
         l2 = get_l2(l1,st)
         l3 = get_l3(l2,st)
         return l3
@@ -64,14 +64,6 @@ def get_l0(config):
             ds_list.append(ds)
     return ds_list
         
-
-def ref_correction(ds):
-    ''' Correction of water level to VanEssen-1 (made from linear regressions in 2023 and 2024) '''
-    ds['h_wtr_2'] =  1.0068 * ds['h_wtr_2']  + 0.1129
-    ds['h_wtr_3'] =  0.9960 * ds['h_wtr_3'] + 0.3320 
-    
-    return ds
-
 def write_csv(ds, outfile):
     '''Write Dataset to .csv file'''
     df = ds.to_dataframe()
@@ -123,65 +115,74 @@ def write_txt(ds,outdir,config_dir):
    
 
 
-# def write_netcdf(ds, outfile,meta_nc_dict,st):
-#     '''Write Dataset to .nc file'''
-#     ds.to_netcdf(outfile, mode='w', format='NETCDF4', compute=True)             
-#     ds.close()
+def write_netcdf(ds, outfile):
+    '''Write Dataset to .nc file'''
+    ds.to_netcdf(outfile, mode='w', format='NETCDF4', compute=True)             
+    ds.close()
     
-
-def write_netcdf(ds, outfile,meta_nc_dict,st):
+"""
+def write_netcdf(ds, filename):
     '''Write Dataset to .nc file'''
     
-    names = meta_nc_dict["var_name"] 
-    longnames = meta_nc_dict["var_long"]
-    units = meta_nc_dict["units"]
-    ds_out = Dataset(outfile, 'w', format='NETCDF4')
+    meta = pd.read_csv("nc_var_meta.csv")
+    title_name = meta['title']
+    names = meta["names"] 
+    longnames = meta["long_names"]
+    units = meta["units"]
+    ds_out = nc.Dataset(filename, 'w', format='NETCDF4')
     current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-    
-    # Create time dimension
     time_dim = ds_out.createDimension('time', len(ds.time))
     
-    # Create time variable (as float64)
-    time_var = ds_out.createVariable('time', 'f8', ('time',), zlib=True)
-    
-    # Use CF-convention
-    time_origin = "seconds since 1970-01-01 00:00:00"
-    time_var.units = time_origin
-    time_var.standard_name = 'time'
-    time_var.calendar = 'standard'
-    
-    # Convert time values
-    time_values = pd.to_datetime(ds.time.values)
-    time_var[:] = date2num(time_values.to_pydatetime(), units=time_origin)
-    
-    ds_out.title = f"Hourly Hydrological Monitoring at {st}, promice_discharge v. 2.1"
+    time_var = ds.createVariable('time', np.datetime64, ('time'), zlib=True)
+    time_var.units = 'degrees_north'
+    time_var.standard_name = 'time in YYYY-MM-DDTHH:MM:SS'
+    time_var.axis = ''
+    time_var[:] = ds.time
+
+    ds_out.title = f"Hourly Hydrological Monitoring  at {title_name}, promice_discharge v. 2.1"
+    ds_out.summary = ''
+    ds_out.keywords = 'Cryosphere > Land Ice > Land Ice Albedo > Reflectance > Greenland > Northern Hemisphere > Grain Size'
+    ds_out.instrument = "OLCI"
+    ds_out.platform = "Sentinel-3A"
+    ds_out.start_date_and_time = date + "T08:00:00Z"
+    ds_out.end_date_and_time = date + "T16:00:00Z"
     ds_out.naming_authority = "geus.dk"
     
+    ds_out.summary = ''
+    ds_out.keywords = 'Cryosphere > Land Ice > Land Ice Albedo > Reflectance > Greenland > Northern Hemisphere > Grain Size'
+    ds_out.activity = 'Space Borne Instrument'
+    ds_out.geospatial_lat_min = lat_min
+    ds_out.geospatial_lat_max = lat_max
+    ds_out.geospatial_lon_min = lon_min
+    ds_out.geospatial_lon_max = lon_max
+    ds_out.time_coverage_start = date + "T08:00:00Z"
+    ds_out.time_coverage_end = date + "T16:00:00Z"
+    ds_out.history = current_date + ' processed'
     ds_out.date_created = current_date
     ds_out.creator_type = "group"
     ds_out.creator_institution = "Geological Survey of Denmark and Greenland (GEUS)"
-    ds_out.creator_email = " kkk@geus.dk, rabni@geus.dk"
-    ds_out.creator_name = "Kristian Kjellerup Kjeldsen, Rasmus Bahbah Nielsen"
+    ds_out.creator_email = " jeb@geus.dk, bav@geus.dk, rabni@geus.dk,adrien.wehrle@geo.uzh.ch"
+    ds_out.creator_name = "Jason Box, Baptiste Vandecrux, Rasmus Bahbah Nielsen, Adrien Wehrlé"
+    ds_out.creator_url = "https://orcid.org/0000-0003-2342-639X"
     ds_out.institution = "Geological Survey of Denmark and Greenland (GEUS)"
     ds_out.publisher_type = "Institute"
     ds_out.publisher_name = "Geological Survey of Denmark and Greenland (GEUS), Glaciology and Climate Department"
     ds_out.publisher_url = "geus.dk"
-    ds_out.publisher_email= "kkk@geus.dk"
-    ds_out.project = "Greenland Integrated Observing System (GIOS)"
+    ds_out.publisher_email= "jeb@geus.dk"
+    ds_out.project = "Operational Sentinel-3 snow and ice products (SICE)"
     ds_out.license = "None"
     
     for v in ds: 
-        if v in list(names):
-            idx = list(names).index(v)
-            z_out = ds_out.createVariable(v, 'f4', ('time'),zlib=True)
+        if v in names:
+            idx = names.index(v)
+            z_out = ds.createVariable(v, 'f4', ('time'),zlib=True)
             z_out[:] = ds[v].to_numpy()
             z_out.standard_name = v
-            z_out.long_name = list(longnames)[idx]
-            z_out.units = list(units)[idx]
-    ds_out.close()
+            z_out.long_name = longnames[idx]
+            z_out.units = units[idx]
             
-    
-def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
+"""    
+def get_l1(l0_list, config,st, l0_air=None,cor=True):
     '''Perform L0 to L1 processing, where input is from a list of Dataset objects
     and corresponding config toml file'''
     ds_list=[]
@@ -198,7 +199,6 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
             
         # Apply time offset
         ds['time'] = offset_time(ds['time'], c['utc_offset'])
-        
         
         if cor:
             if 'analog_dvr_scale' in c: 
@@ -229,42 +229,26 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
             
             # Apply pressure offset, also apply to p_wtr_l, p_air
             if hasattr(ds, 'p_wtr_1'):
-                if st == 'wat_br':
-                    
-                    if c['pls_m'] == 'current':
-                        ds['p_wtr_1'] = to_pressure(ds['p_wtr_1']-c['current_offset_1'])
                 ds['p_wtr_1_cor'] = offset_press(ds['p_wtr_1'], c['p_offset_1'])
             if hasattr(ds, 'p_wtr_2'): 
-                if st == 'wat_br':
-                    plsm = c['pls_m']
-                    print(f'What unit does PLS_M HAVE {plsm}')
-                    if c['pls_m'] == 'current':
-                        print(f'WE ARE GOING TO PRESSURE')
-                        print('p_wtr_2 before to pressure')
-                        print(ds['p_wtr_2'])
-                        ds['p_wtr_2'] = to_pressure(ds['p_wtr_2']-c['current_offset_2'])
-                        print('p_wtr_2 after to pressure')
-                        print(ds['p_wtr_2'])
                 ds['p_wtr_2_cor'] = offset_press(ds['p_wtr_2'], c['p_offset_2']) 
                 ds['p_wtr_2_cor'] = ds['p_wtr_2_cor'].where(ds['p_wtr_2_cor'] != 1450.0)
             if hasattr(ds, 'p_wtr_3'): 
-                if st == 'wat_br':
-                    if c['pls_m'] == 'current':
-                        ds['p_wtr_3'] = to_pressure(ds['p_wtr_3']-c['current_offset_3'])
                 ds['p_wtr_3_cor'] = offset_press(ds['p_wtr_3'], c['p_offset_3']) 
                 ds['p_wtr_3_cor'] = ds['p_wtr_3_cor'].where(ds['p_wtr_3_cor'] != 1450.0)
             if hasattr(ds, 'p_air_baro'):
                 ds['p_air_baro_cor'] = offset_press(ds['p_air_baro'], c['p_offset_a'])
   
         # Resample to hourly mean values
-        ds = resample_data(ds, ts)
-        ds_list.append(ds)
+        ds = resample_data(ds, '60min')
+        ds_list.append(ds) 
 
     # Combine all files
     print('Combining files into single L1 object...')
     l1 = ds_list[0]
     for d in ds_list[1:]:
         l1 = l1.combine_first(d)             
+  
     if st == 'wat_br':
         print('Merging external atmospheric data...')
         
@@ -292,6 +276,7 @@ def get_l2(L1,st):
     # Calculate water level with air pressure adjustment (p = H rho g)                
     # Perform this only if p_wtr_l_cor-p_air_cor > p_dif_min and t_wtr_l_cor > t_wtr_min:    
     ds['h_wtr_1'] = calc_water_level(ds['p_wtr_1_cor'], 
+                                   ds['p_air_baro_cor'], 
                                    ds['h_dvr_1'])      
   
     # adding the raw water level data to the file
@@ -307,6 +292,7 @@ def get_l2(L1,st):
     # Perform this only if p_wtr_u_cor-p_air_cor > p_dif_min and t_wtr_u_cor > t_wtr_min:
    
     ds['h_wtr_2'] = calc_water_level(ds['p_wtr_2_cor'], 
+                                   ds['p_air_baro_cor'],
                                    ds['h_dvr_2'])
     # adding the raw water level data to the file
     if raw_l2 is not None:
@@ -314,9 +300,8 @@ def get_l2(L1,st):
     
     
     ds['h_wtr_3'] = calc_water_level(ds['p_wtr_3_cor'],
+                                   ds['p_air_baro_cor'],
                                    ds['h_dvr_3'])
-    
-    ds = ref_correction(ds)
 
     # Fill air temperature gaps with interpolated values
     
@@ -348,13 +333,11 @@ def get_l3(L2,st):
         ds['q_wtr_3'] = calc_discharge(ds['h_wtr_3'])
         
         
-        ds['h_wtr_comb'] = ds['h_wtr_3'].combine_first(ds['h_wtr_2']).combine_first(ds['h_wtr_1'])   
+        ds['h_wtr_comb'] = ds['h_wtr_1'].combine_first(ds['h_wtr_2']).combine_first(ds['h_wtr_3'])   
         #ds['t_wtr_comb'] = ds['t_wtr_1'].combine_first(ds['t_wtr_2']).combine_first(ds['t_wtr_3'])   
         
         
-        #ds['q_wtr_comb'] = ds['q_wtr_1'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_3'])   
-        ds['q_wtr_comb'] = ds['q_wtr_3'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_1'])
-        
+        ds['q_wtr_comb'] = ds['q_wtr_1'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_3'])   
         ds['q_wtr_comb_unc'] = ds['q_wtr_comb']*0.15
         
         # Calculate diver + temperature discharge
@@ -366,7 +349,7 @@ def get_l3(L2,st):
         ds['q_wtr_mod_autumn'] = 0.31*ds['t_air_pos']**3.4
         
         ds['q_wtr_mod_spring'] = ds['q_wtr_mod_spring'].where(ds['time.month']<=6)
-        ds['q_wtr_mod_autumn'] = ds['q_wtr_mod_autumn'].where(ds['time.month']>=7)
+        ds['q_wtr_mod_autumn'] = ds['q_wtr_mod_autumn'].where(ds['time.month']>=7)  
         
         ds['q_wtr_mod_all'] = ds['q_wtr_mod_spring'].combine_first(ds['q_wtr_mod_autumn']) 
         ds['q_wtr_ext'] = ds['q_wtr_comb'].combine_first(ds['q_wtr_mod_all'])
@@ -632,7 +615,7 @@ def resample_data(ds, t):
            coords={'time':df.index}, attrs=ds[c].attrs) for c in df.columns]
     return xr.Dataset(dict(zip(df.columns,vals)), attrs=ds.attrs)      
 
-def calc_water_level(p_wtr, h_dvr):
+def calc_water_level(p_wtr, p_air, h_dvr, p_dif_min=5., t_wtr_min=-100.):
     '''Calculate water level with air pressure adjustment. Water temperature
     thresholding is currently not used in this calculation
 
@@ -658,7 +641,10 @@ def calc_water_level(p_wtr, h_dvr):
 
     '''
    
-    return h_dvr + (p_wtr/98.2) 
+    
+    diff = p_wtr - p_air  
+    diff = diff.where(diff > p_dif_min) 
+    return h_dvr + (diff/98.2) 
        
 def calc_discharge(H): # Version 3 by Dirk van As
     '''Calculate diver discharge. This is lifted directly from the IDL 
@@ -675,20 +661,6 @@ def calc_discharge(H): # Version 3 by Dirk van As
         Discharge array
     ''' 
     return 7.50536*H**2.34002 
-
-def to_pressure(var):
-    """
-    Converts a variable to pressure using the formula (125 * x) - 500
-
-    Parameters:
-    - var (xr.DataArray): Input xarray variable with a 'time' coordinate.
-
-    Returns:
-    - xr.DataArray: Transformed DataArray with pressure applied after 2025-05-01.
-    """
-
-
-    return (125 * var) - 500
 
 # Function to detect stuck values and replace them with -9999
 def static_f(dataset, var_name, threshold=5, replacement=-9999):
@@ -725,23 +697,21 @@ if __name__ == "__main__":
     config_dir = args.config
     l0_dir = args.data
     out_dir = args.out
-    
     #issues_dir = args.issues
     
     #flags_st = glob.glob(issues_dir + os.sep + 'flags' + os.sep + '*.csv')
-    print(config_dir)
+    
     meta = pd.read_csv(config_dir + os.sep + 'station_meta.csv',sep=';')
-    meta_nc_dict = pd.read_excel(config_dir + os.sep +'meta_nc.xlsx', sheet_name=None)
     tx_name = meta['tx_name']
     st_name = meta['out_tx_name']
     
     # Bridge station site raw data processing
     print('Commencing station tx processing...')
     time_steps = ['10min','hourly','daily']
-    resample = ['10min','60min','1440min']
+    resample = [None,'1h','1d']
     # Bridge station site raw data processing
     print('Commencing station tx processing...')
-   
+    
     for tx,st in zip(tx_name,st_name):
         
         #if f'{st_name}_tx' in flags_st:
@@ -758,24 +728,19 @@ if __name__ == "__main__":
         
         print(f'Commencing station tx processing -> Station Name: {st}')
         config_file = config_dir + os.sep + f'{tx}.toml'
+        ds = process(l0_dir, config_file,st,flag=fl)
         
         for ts,rs in zip(time_steps,resample):
-            ds = process(l0_dir, config_file,st,flag=fl,ts=rs)
             
-            write_csv(ds, f'{out}_{ts}.csv')
-            #write_txt(ds, f'{out}.txt',config_dir)
-            write_netcdf(ds, f'{out}_{ts}.nc',meta_nc_dict[st],st)
-            
-            # if rs:
-            #     print(f'Resampling station tx data into a {ts} file')
-            #     #ds_resample = ds.resample(time=rs).mean()
-            #     ds_resample = resample_data(ds, ts)
-            # else:
-            #     ds_resample = ds.copy()
-       
-        
-        
+            if rs:
+                ds_resample = ds.resample(time=rs).mean()
+                print(f'Resampling station tx data into a {ts} file')
+            else:
+                ds_resample = ds.copy()
                 
-            
+            write_csv(ds_resample, f'{out}_{ts}.csv')
+            #write_txt(ds, f'{out}.txt',config_dir)
+            write_netcdf(ds_resample, f'{out}_{ts}.nc')
+    
     
     
