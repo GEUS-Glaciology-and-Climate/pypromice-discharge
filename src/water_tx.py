@@ -746,8 +746,8 @@ if __name__ == "__main__":
    
     for tx,st in zip(tx_name,st_name):
         
-        if f'{st_name}_tx' in flags_st:
-            fl = [f for f in flags_st if st_name in f][0]
+        if any(f'{st}_tx' in s for s in flags_st):
+            fl = [f for f in flags_st if st in f][0]
         else:
             fl = None
         
