@@ -44,7 +44,7 @@ def process(inpath, config_file,st,l1=False,flag=None,ts='10min'):
     if not l1:
         l1 = get_l1(ds_list, config,st,ts=ts)
         if flag:
-            l1 = flag_f(ds,flag)
+            l1 = flag_f(l1,flag)
         l2 = get_l2(l1,st)
         l3 = get_l3(l2,st)
         return l3
