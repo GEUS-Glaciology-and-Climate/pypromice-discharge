@@ -717,8 +717,8 @@ def flag_f(data,flag):
             var = flag_f['variable'][i]
             data[var].loc[t0:t1] = -9999
             print(f'Masking {var} in period {t0} -> {t1}')
-            
-    return data
+    
+    return data.fillna(-9999)
 
 if __name__ == "__main__":
     
