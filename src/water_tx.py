@@ -43,6 +43,8 @@ def process(inpath, config_file,st,l1=False,flag=None,ts='10min'):
     
     if not l1:
         l1 = get_l1(ds_list, config,st,ts=ts)
+        if flag:
+            l1 = flag_f(ds,flag)
         l2 = get_l2(l1,st)
         l3 = get_l3(l2,st)
         return l3
@@ -728,8 +730,8 @@ if __name__ == "__main__":
     
     #issues_dir = args.issues
     
-    #flags_st = glob.glob(issues_dir + os.sep + 'flags' + os.sep + '*.csv')
-    print(config_dir)
+    flags_st = glob.glob(config_dir + os.sep + 'flags' + os.sep + '*.csv')
+    
     meta = pd.read_csv(config_dir + os.sep + 'station_meta.csv',sep=';')
     meta_nc_dict = pd.read_excel(config_dir + os.sep +'meta_nc.xlsx', sheet_name=None)
     tx_name = meta['tx_name']
@@ -744,10 +746,10 @@ if __name__ == "__main__":
    
     for tx,st in zip(tx_name,st_name):
         
-        #if f'{st_name}_tx' in flags_st:
-        #    fl = [f for f in flags_st if st_name in f][0]
-        #else:
-        fl = None
+        if f'{st_name}_tx' in flags_st:
+            fl = [f for f in flags_st if st_name in f][0]
+        else:
+            fl = None
         
         out_st_dir = out_dir + os.sep + st
         
@@ -772,10 +774,3 @@ if __name__ == "__main__":
             #     ds_resample = resample_data(ds, ts)
             # else:
             #     ds_resample = ds.copy()
-       
-        
-        
-                
-            
-    
-    
