@@ -318,13 +318,15 @@ def get_l2(L1,st):
     ds['h_wtr_3'] = calc_water_level(ds['p_wtr_3_cor'],
                                    ds['h_dvr_3'])
     
-    ds = ref_correction(ds)
-
     # Fill air temperature gaps with interpolated values
     
     
     # Fill air temperature gaps with interpolated values
     if st == 'wat_br':
+        
+        # Correct wat_br pls data to van essen 
+        ds = ref_correction(ds)
+
         print('Smoothing and interpolating atmospheric data...')
         ds['t_air_interp'] = ds['t_air_comb'].interpolate_na('time', method='linear')
         ds['t_air_smooth'] = ds['t_air_interp'].rolling(time=240).mean()
