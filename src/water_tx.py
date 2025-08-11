@@ -715,10 +715,10 @@ def flag_f(data,flag):
             t0 = np.datetime64(pd.to_datetime(flag_f['t0'][i],format="%d-%m-%Y %H:%M"))
             t1 = np.datetime64(pd.to_datetime(flag_f['t1'][i],format="%d-%m-%Y %H:%M"))
             var = flag_f['variable'][i]
-            data[var].loc[t0:t1] = -9999
+            data[var].loc[t0:t1] = np.nan
             print(f'Masking {var} in period {t0} -> {t1}')
     
-    return data.fillna(-9999)
+    return data
 
 if __name__ == "__main__":
     
