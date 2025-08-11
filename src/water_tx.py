@@ -293,31 +293,26 @@ def get_l2(L1,st):
             
     # Calculate water level with air pressure adjustment (p = H rho g)                
     # Perform this only if p_wtr_l_cor-p_air_cor > p_dif_min and t_wtr_l_cor > t_wtr_min:    
-    ds['h_wtr_1'] = calc_water_level(ds['p_wtr_1_cor'], 
+    if hasattr(ds, 'p_wtr_1_cor'):
+        ds['h_wtr_1'] = calc_water_level(ds['p_wtr_1_cor'], 
                                    ds['h_dvr_1'])      
   
     # adding the raw water level data to the file
     if raw_l2 is not None:
         ds['h_wtr_1'] = ds['h_wtr_1'].fillna(raw_l2)
    
-    # Checking if there is any water level data in the raw data
-    if 'h_wtr_2' in ds:
-        raw_l2 = ds['h_wtr_2']
-    else :
-        raw_l2 = None
         
     # Perform this only if p_wtr_u_cor-p_air_cor > p_dif_min and t_wtr_u_cor > t_wtr_min:
-   
-    ds['h_wtr_2'] = calc_water_level(ds['p_wtr_2_cor'], 
+    if hasattr(ds, 'p_wtr_2_cor'):
+       ds['h_wtr_2'] = calc_water_level(ds['p_wtr_2_cor'], 
                                    ds['h_dvr_2'])
     # adding the raw water level data to the file
     if raw_l2 is not None:
         ds['h_wtr_2'] = ds['h_wtr_2'].fillna(raw_l2)
     
-    
-    ds['h_wtr_3'] = calc_water_level(ds['p_wtr_3_cor'],
+    if hasattr(ds, 'p_wtr_3_cor'):
+        ds['h_wtr_3'] = calc_water_level(ds['p_wtr_3_cor'],
                                    ds['h_dvr_3'])
-    
     # Fill air temperature gaps with interpolated values
     
     
