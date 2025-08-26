@@ -236,6 +236,7 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
                     if c['pls_m'] == 'current':
                         ds['p_wtr_1'] = to_pressure(ds['p_wtr_1']-c['current_offset_1'])
                 ds['p_wtr_1_cor'] = offset_press(ds['p_wtr_1'], c['p_offset_1'])
+                ds['p_wtr_1_cor'] = ds['p_wtr_1_cor'].where(ds['p_wtr_1_cor'] != 1450.0)
             if hasattr(ds, 'p_wtr_2'): 
                 if st == 'wat_br':
                     plsm = c['pls_m']
@@ -294,8 +295,11 @@ def get_l2(L1,st):
     # Calculate water level with air pressure adjustment (p = H rho g)                
     # Perform this only if p_wtr_l_cor-p_air_cor > p_dif_min and t_wtr_l_cor > t_wtr_min:    
     if hasattr(ds, 'p_wtr_1_cor'):
-        ds['h_wtr_1'] = calc_water_level(ds['p_wtr_1_cor'], 
-                                   ds['h_dvr_1'])      
+        if st in ['wat_r','rus_r']:
+            ds['h_wtr_1'] = ds['p_wtr_1_cor']
+        else:
+            ds['h_wtr_1'] = calc_water_level(ds['p_wtr_1_cor'], 
+                                             ds['h_dvr_1'])      
   
     # adding the raw water level data to the file
     if raw_l2 is not None:
@@ -304,6 +308,7 @@ def get_l2(L1,st):
         
     # Perform this only if p_wtr_u_cor-p_air_cor > p_dif_min and t_wtr_u_cor > t_wtr_min:
     if hasattr(ds, 'p_wtr_2_cor'):
+        
        ds['h_wtr_2'] = calc_water_level(ds['p_wtr_2_cor'], 
                                    ds['h_dvr_2'])
     # adding the raw water level data to the file
@@ -336,29 +341,40 @@ def get_l3(L2,st):
     '''Perform L2 to L3 processing'''
     ds = L2.copy(deep=True)
   
-    # Calculate diver discharge
-    if st == 'wat_br':
+    
         
-        print('Deriving diver-only discharge...')
+    print('Deriving diver-only discharge...')
+    if hasattr(ds, 'h_wtr_1'):
         ds['q_wtr_1'] = calc_discharge(ds['h_wtr_1'])
-        # l2['q_l_h_unc'] = l2['q_l_h']*0.15 
+    # l2['q_l_h_unc'] = l2['q_l_h']*0.15 
+    if hasattr(ds, 'h_wtr_2'):
         ds['q_wtr_2'] = calc_discharge(ds['h_wtr_2'])
-        # l2['q_u_h_unc'] = l2['q_u_h']*0.15 
+    # l2['q_u_h_unc'] = l2['q_u_h']*0.15 
+    if hasattr(ds, 'h_wtr_3'):
         ds['q_wtr_3'] = calc_discharge(ds['h_wtr_3'])
-        
-        
-        ds['h_wtr_comb'] = ds['h_wtr_3'].combine_first(ds['h_wtr_2']).combine_first(ds['h_wtr_1'])   
-        #ds['t_wtr_comb'] = ds['t_wtr_1'].combine_first(ds['t_wtr_2']).combine_first(ds['t_wtr_3'])   
-        
-        
-        #ds['q_wtr_comb'] = ds['q_wtr_1'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_3'])   
-        ds['q_wtr_comb'] = ds['q_wtr_3'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_1'])
-        
-        ds['q_wtr_comb_unc'] = ds['q_wtr_comb']*0.15
-        
-        # Calculate diver + temperature discharge
-        # Determined using IDL program Discharge_from_T_DMI  
-  
+    
+    
+    if hasattr(ds, 'h_wtr_1'):
+        if hasattr(ds, 'h_wtr_3'):
+            ds['h_wtr_comb'] = ds['h_wtr_3'].combine_first(ds['h_wtr_2']).combine_first(ds['h_wtr_1'])
+        else:
+            ds['h_wtr_comb'] = ds['h_wtr_1'].combine_first(ds['h_wtr_2'])
+    #ds['t_wtr_comb'] = ds['t_wtr_1'].combine_first(ds['t_wtr_2']).combine_first(ds['t_wtr_3'])   
+    
+    
+    #ds['q_wtr_comb'] = ds['q_wtr_1'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_3'])   
+    if hasattr(ds, 'q_wtr_1'):
+        if hasattr(ds, 'q_wtr_3'):
+            ds['q_wtr_comb'] = ds['q_wtr_3'].combine_first(ds['q_wtr_2']).combine_first(ds['q_wtr_1'])
+        else:
+            ds['q_wtr_comb'] = ds['q_wtr_1'].combine_first(ds['q_wtr_2'])
+    
+    
+    ds['q_wtr_comb_unc'] = ds['q_wtr_comb']*0.15
+    
+    # Calculate diver + temperature discharge
+    # Determined using IDL program Discharge_from_T_DMI  
+    if st == 'wat_br':
         print('Deriving diver and temperature linked discharge...')
        
         ds['q_wtr_mod_spring'] = 0.17*ds['t_air_pos']**3.4
@@ -390,7 +406,7 @@ def get_l3(L2,st):
         
         ds['q_wtr_ext_cum'] = ds['q_wtr_ext_cum']*1.e-9*3600. 
         ds['q_wtr_ext_cum_unc'] = ds['q_wtr_ext_cum_unc']*1.e-9*3600.     
-        
+            
     print('L3 processing complete')
     return ds          
             
