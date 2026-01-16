@@ -285,7 +285,7 @@ def get_l2(L1,st):
     '''Perform L1 to L2 processing'''
     ds = L1.copy(deep=True)   
     print('Calculating water level...')
-        
+    
     # Checking if there is any water level data in the raw data
     if 'h_wtr_1' in ds:
         raw_l2 = ds['h_wtr_1']
@@ -410,6 +410,73 @@ def get_l3(L2,st):
     print('L3 processing complete')
     return ds          
             
+
+def qc_filter(
+        ds: xr.Dataset,
+    var1: str,
+    var2: str,
+    n_sigma: float = 2.0,
+    method: str = "mad",      # "mad" or "std"
+    dim: str = "time",
+    drop: bool = False,
+    temp_var: str = "t_air",
+    freezing_point: float = 0.0,
+):
+    """
+    QC filter based on:
+
+      1) Difference between var1 and var2:
+         keep where |diff - median(diff)| <= n_sigma * sigma
+
+      2) Air temperature:
+         additionally require temp_var >= freezing_point
+
+    The final mask is: mask = mask_diff & mask_temp
+    """
+
+    # ----- 1) diff-based QC -----
+    diff = ds[var1] - ds[var2]
+
+    median_diff = diff.median(dim=dim, skipna=True)
+    mean_diff   = diff.mean(dim=dim,   skipna=True)
+    std_diff    = diff.std(dim=dim,    skipna=True)
+
+    # robust MAD-based sigma
+    mad = np.abs(diff - median_diff).median(dim=dim, skipna=True)
+    mad_sigma = 1.4826 * mad
+
+    if method == "std":
+        sigma = std_diff
+    elif method == "mad":
+        sigma = mad_sigma
+    else:
+        raise ValueError("method must be 'std' or 'mad'")
+
+    deviation = np.abs(diff - median_diff)
+    mask_diff = deviation <= n_sigma * sigma
+
+    # ----- 2) temperature-based QC: t_air >= 0°C -----
+    temp = ds[temp_var]
+    mask_temp = temp >= freezing_point
+
+    # ----- combine both QC rules -----
+    mask = mask_diff & mask_temp
+
+    # ----- apply mask to the whole dataset -----
+    if drop:
+        ds_filtered = ds.where(mask, drop=True)
+    else:
+        ds_filtered = ds.where(mask)
+
+    # Optional: print some diagnostics
+    print("mean(diff)   =", float(mean_diff.values))
+    print("median(diff) =", float(median_diff.values))
+    print("std(diff)    =", float(std_diff.values))
+    print("MAD(diff)    =", float(mad.values))
+    print("sigma used   =", float(sigma.values))
+
+    return ds_filtered, diff, mask
+
 def get_config(config_file, inpath):
     '''Load configuration from .toml file. PROMICE .toml files support defining 
     features at the top level which apply to all nested properties, but do not 
@@ -721,16 +788,58 @@ def static_f(dataset, var_name, threshold=5, replacement=-9999):
     dataset[var_name] = (('time',), values)
     return dataset
 
-def flag_f(data,flag):
-    flag_f = pd.read_csv(flag,delimiter=';')
-    for i in list(flag_f.index):
-        if hasattr(data, flag_f['variable'][i]):
-            t0 = np.datetime64(pd.to_datetime(flag_f['t0'][i],format="%d-%m-%Y %H:%M"))
-            t1 = np.datetime64(pd.to_datetime(flag_f['t1'][i],format="%d-%m-%Y %H:%M"))
-            var = flag_f['variable'][i]
-            data[var].loc[t0:t1] = np.nan
-            print(f'Masking {var} in period {t0} -> {t1}')
+# def flag_f(data,flag):
+#     flag_f = pd.read_csv(flag,delimiter=';')
+#     for i in list(flag_f.index):
+#         if hasattr(data, flag_f['variable'][i]):
+#             t0 = np.datetime64(pd.to_datetime(flag_f['t0'][i],format="%d-%m-%Y %H:%M"))
+#             t1 = np.datetime64(pd.to_datetime(flag_f['t1'][i],format="%d-%m-%Y %H:%M"))
+#             var = flag_f['variable'][i]
+#             data[var].loc[t0:t1] = np.nan
+#             print(f'Masking {var} in period {t0} -> {t1}')
     
+#     return data
+
+def flag_f(data, flag_csv):
+    flags = pd.read_csv(flag_csv, delimiter=';')
+
+    # Parse times; blank/invalid -> NaT
+    flags["t0"] = pd.to_datetime(flags["t0"], format="%d-%m-%Y %H:%M", errors="coerce")
+    flags["t1"] = pd.to_datetime(flags["t1"], format="%d-%m-%Y %H:%M", errors="coerce")
+
+    for _, row in flags.iterrows():
+        var = row["variable"]
+        t0 = row["t0"]
+        t1 = row["t1"]
+
+        # Basic validation
+        if pd.isna(var) or pd.isna(t0):
+            continue
+
+        # Column/variable existence check (pandas DataFrame case)
+        if isinstance(data, pd.DataFrame):
+            if var not in data.columns:
+                continue
+
+            if pd.isna(t1):
+                data.loc[t0:, var] = np.nan
+                print(f"Masking {var} from {t0} onward (open-ended)")
+            else:
+                data.loc[t0:t1, var] = np.nan
+                print(f"Masking {var} in period {t0} -> {t1}")
+
+        else:
+            # If it's not a DataFrame (e.g., xarray Dataset-like), keep your hasattr logic:
+            if not hasattr(data, var):
+                continue
+
+            if pd.isna(t1):
+                data[var].loc[t0:] = np.nan
+                print(f"Masking {var} from {t0} onward (open-ended)")
+            else:
+                data[var].loc[t0:t1] = np.nan
+                print(f"Masking {var} in period {t0} -> {t1}")
+
     return data
 
 if __name__ == "__main__":
