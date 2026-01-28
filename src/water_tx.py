@@ -137,6 +137,7 @@ def write_netcdf(ds, outfile,meta_nc_dict,st):
     names = meta_nc_dict["var_name"] 
     longnames = meta_nc_dict["var_long"]
     units = meta_nc_dict["units"]
+    flag = meta_nc_dict["flag"]
     ds_out = Dataset(outfile, 'w', format='NETCDF4')
     current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     
@@ -175,11 +176,12 @@ def write_netcdf(ds, outfile,meta_nc_dict,st):
     for v in ds: 
         if v in list(names):
             idx = list(names).index(v)
-            z_out = ds_out.createVariable(v, 'f4', ('time'),zlib=True)
-            z_out[:] = ds[v].to_numpy()
-            z_out.standard_name = v
-            z_out.long_name = list(longnames)[idx]
-            z_out.units = list(units)[idx]
+            if flag[idx] == 'yes':
+                z_out = ds_out.createVariable(v, 'f4', ('time'),zlib=True)
+                z_out[:] = ds[v].to_numpy()
+                z_out.standard_name = v
+                z_out.long_name = list(longnames)[idx]
+                z_out.units = list(units)[idx]
     ds_out.close()
             
     
@@ -189,7 +191,7 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
     ds_list=[]
     
     for i,ds in enumerate(l0_list):
-        
+         
         c = list(config.values())[i]
         print(f'Correcting variables in {c["file"]}...')
         
@@ -308,9 +310,12 @@ def get_l2(L1,st):
         
     # Perform this only if p_wtr_u_cor-p_air_cor > p_dif_min and t_wtr_u_cor > t_wtr_min:
     if hasattr(ds, 'p_wtr_2_cor'):
-        
-       ds['h_wtr_2'] = calc_water_level(ds['p_wtr_2_cor'], 
+       if st in ['wat_r','rus_r']:
+            ds['h_wtr_2'] = ds['p_wtr_2_cor']
+       else:
+            ds['h_wtr_2'] = calc_water_level(ds['p_wtr_2_cor'], 
                                    ds['h_dvr_2'])
+    
     # adding the raw water level data to the file
     if raw_l2 is not None:
         ds['h_wtr_2'] = ds['h_wtr_2'].fillna(raw_l2)
@@ -318,8 +323,12 @@ def get_l2(L1,st):
     if hasattr(ds, 'p_wtr_3_cor'):
         ds['h_wtr_3'] = calc_water_level(ds['p_wtr_3_cor'],
                                    ds['h_dvr_3'])
-    # Fill air temperature gaps with interpolated values
     
+    
+    # compute rain amount per time step
+    
+    if hasattr(ds, 'precip_cum'):
+        ds['rain_amount'] = rain_amount(ds)
     
     # Fill air temperature gaps with interpolated values
     if st == 'wat_br':
@@ -411,16 +420,62 @@ def get_l3(L2,st):
     return ds          
             
 
+def rain_amount(
+    cum: xr.DataArray,
+    dim: str = "time",
+    *,
+    negative_tol: float = 0.0,
+    on_reset: str = "use_current",   # "use_current", "zero", "nan"
+    rollover_at: float | None = None, # e.g. 1000.0 if gauge rolls over at 1000 mm
+    clip_min: float = 0.0,
+) -> xr.DataArray:
+    """
+    Convert cumulative precipitation to per-timestep precipitation amount.
+
+    - Uses shift() so output has same length as input (first step becomes NaN).
+    - If diff < -negative_tol, treat as reset/rollover depending on settings.
+
+    Returns: DataArray of precipitation amount per time step (same units as cum).
+    """
+    prev = cum.shift({dim: 1})
+    inc = cum - prev  # same length, first element becomes NaN
+
+    # Handle resets / rollovers when increment goes negative beyond tolerance
+    is_reset = inc < -negative_tol
+
+    if rollover_at is not None:
+        # rollover: amount = (rollover_at - prev) + cum
+        rollover_inc = (rollover_at - prev) + cum
+        inc = xr.where(is_reset, rollover_inc, inc)
+    else:
+        if on_reset == "use_current":
+            inc = xr.where(is_reset, cum, inc)   # assume reset to ~0, so amount ~ current cum
+        elif on_reset == "zero":
+            inc = xr.where(is_reset, 0.0, inc)
+        elif on_reset == "nan":
+            inc = xr.where(is_reset, np.nan, inc)
+        else:
+            raise ValueError("on_reset must be one of: 'use_current', 'zero', 'nan'")
+
+    # Optional clipping (gets rid of tiny negative noise if you set clip_min=0)
+    if clip_min is not None:
+        inc = inc.clip(min=clip_min)
+
+    # Preserve some metadata
+    inc.attrs = dict(cum.attrs)
+    inc.attrs["long_name"] = f"Precipitation amount per interval derived from {cum.name or 'cumulative'}"
+    return inc
+
 def qc_filter(
         ds: xr.Dataset,
-    var1: str,
-    var2: str,
-    n_sigma: float = 2.0,
-    method: str = "mad",      # "mad" or "std"
-    dim: str = "time",
-    drop: bool = False,
-    temp_var: str = "t_air",
-    freezing_point: float = 0.0,
+        var1: str,
+        var2: str,
+        n_sigma: float = 2.0,
+        method: str = "mad",      # "mad" or "std"
+        dim: str = "time",
+        drop: bool = False,
+        temp_var: str = "t_air",
+        freezing_point: float = 0.0,
 ):
     """
     QC filter based on:
