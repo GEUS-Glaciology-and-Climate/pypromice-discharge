@@ -463,7 +463,7 @@ def rain_amount(
 
     # Preserve some metadata
     inc.attrs = dict(cum.attrs)
-    inc.attrs["long_name"] = f"Precipitation amount per interval derived from {cum.name or 'cumulative'}"
+    inc.attrs["long_name"] = f"Precipitation amount per time step"
     return inc
 
 def qc_filter(
