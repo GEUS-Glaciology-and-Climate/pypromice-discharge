@@ -328,7 +328,13 @@ def get_l2(L1,st):
     # compute rain amount per time step
     
     if hasattr(ds, 'precip_cum'):
-        ds['rain_amount'] = rain_amount(ds)
+        ds['rain_amount'] = rain_amount(
+            ds["precip_cum"],
+            negative_tol=0.1,      # small tolerance for sensor noise (mm)
+            on_reset="use_current",
+            rollover_at=None,      # set if your gauge rolls over
+            clip_min=0.0,
+        )
     
     # Fill air temperature gaps with interpolated values
     if st == 'wat_br':
