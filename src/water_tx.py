@@ -329,11 +329,13 @@ def get_l2(L1,st):
     
     if hasattr(ds, 'precip_cum'):
         ds['rain_amount'] = rain_amount(
-            ds["precip_cum"],
-            negative_tol=0.1,      # small tolerance for sensor noise (mm)
-            on_reset="use_current",
-            rollover_at=None,      # set if your gauge rolls over
-            clip_min=0.0,
+        ds["precip_cum"],
+        negative_tol=0.1,
+        on_reset="use_current",
+        clip_min=0.0,
+        temp=ds["t_air"],
+        freezing_point=0.0,          # <- mask where t_air < 0°C
+        mask_when_temp_nan=False,    # set True if you also want NaN temp to mask
         )
     
     # Fill air temperature gaps with interpolated values
@@ -431,9 +433,12 @@ def rain_amount(
     dim: str = "time",
     *,
     negative_tol: float = 0.0,
-    on_reset: str = "use_current",   # "use_current", "zero", "nan"
-    rollover_at: float | None = None, # e.g. 1000.0 if gauge rolls over at 1000 mm
+    on_reset: str = "use_current",      # "use_current", "zero", "nan"
+    rollover_at: float | None = None,   # e.g. 1000.0 if gauge rolls over at 1000 mm
     clip_min: float = 0.0,
+    temp: xr.DataArray | None = None,   # pass ds["t_air"]
+    freezing_point: float = 0.0,        # mask when temp < freezing_point
+    mask_when_temp_nan: bool = False,   # optional: also mask when temp is NaN
 ) -> xr.DataArray:
     """
     Convert cumulative precipitation to per-timestep precipitation amount.
@@ -466,7 +471,14 @@ def rain_amount(
     # Optional clipping (gets rid of tiny negative noise if you set clip_min=0)
     if clip_min is not None:
         inc = inc.clip(min=clip_min)
-
+        # Mask precip amounts when temperature is below freezing_point
+        
+    if temp is not None:
+        temp_aligned = temp.broadcast_like(inc)
+        mask = temp_aligned >= freezing_point
+        if mask_when_temp_nan:
+            mask = mask & temp_aligned.notnull()
+        inc = inc.where(mask)
     # Preserve some metadata
     inc.attrs = dict(cum.attrs)
     inc.attrs["long_name"] = f"Precipitation amount per time step"
