@@ -243,7 +243,7 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
                                                      ds['h_dvr_1'])
                 elif c['pls_m_1'] == 'centimeter':
                     ds['h_wtr_1'] = ds['p_wtr_1']/100
-                elif ['pls_m_1'] == 'meter':
+                elif c['pls_m_1'] == 'meter':
                     ds['h_wtr_1'] = ds['p_wtr_1']
                    
             if hasattr(ds, 'p_wtr_2'): 
@@ -256,7 +256,7 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
                                                      ds['h_dvr_2'])
                 elif c['pls_m_2'] == 'centimeter':
                     ds['h_wtr_2'] = ds['p_wtr_2']/100
-                elif ['pls_m_2'] == 'meter':
+                elif c['pls_m_2'] == 'meter':
                     ds['h_wtr_2'] = ds['p_wtr_2']
                     
             if hasattr(ds, 'p_wtr_3'): 
@@ -269,7 +269,7 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
                                                      ds['h_dvr_3'])
                 elif c['pls_m_3'] == 'centimeter':
                     ds['h_wtr_3'] = ds['p_wtr_3']/100
-                elif ['pls_m_3'] == 'meter':
+                elif c['pls_m_3'] == 'meter':
                     ds['h_wtr_3'] = ds['p_wtr_3']
                     
             if hasattr(ds, 'p_air_baro'):
