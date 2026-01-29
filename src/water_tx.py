@@ -233,31 +233,45 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
             
             # Apply pressure offset, also apply to p_wtr_l, p_air
             if hasattr(ds, 'p_wtr_1'):
-                if st == 'wat_br':
-                    
-                    if c['pls_m'] == 'current':
+                
+                if c['pls_m_1'] == 'current' or c['pls_m_1'] == 'pressure':
+                    if c['pls_m_1'] == 'current':
                         ds['p_wtr_1'] = to_pressure(ds['p_wtr_1']-c['current_offset_1'])
-                ds['p_wtr_1_cor'] = offset_press(ds['p_wtr_1'], c['p_offset_1'])
-                ds['p_wtr_1_cor'] = ds['p_wtr_1_cor'].where(ds['p_wtr_1_cor'] != 1450.0)
+                    ds['p_wtr_1_cor'] = offset_press(ds['p_wtr_1'], c['p_offset_1'])
+                    ds['p_wtr_1_cor'] = ds['p_wtr_1_cor'].where(ds['p_wtr_1_cor'] != 1450.0)
+                    ds['h_wtr_1'] = calc_water_level(ds['p_wtr_1_cor'], 
+                                                     ds['h_dvr_1'])
+                elif c['pls_m_1'] == 'centimeter':
+                    ds['h_wtr_1'] = ds['p_wtr_1']/100
+                elif ['pls_m_1'] == 'meter':
+                    ds['h_wtr_1'] = ds['p_wtr_1']
+                   
             if hasattr(ds, 'p_wtr_2'): 
-                if st == 'wat_br':
-                    plsm = c['pls_m']
-                    print(f'What unit does PLS_M HAVE {plsm}')
-                    if c['pls_m'] == 'current':
-                        print(f'WE ARE GOING TO PRESSURE')
-                        print('p_wtr_2 before to pressure')
-                        print(ds['p_wtr_2'])
+                if c['pls_m_2'] == 'current' or c['pls_m_2'] == 'pressure':
+                    if c['pls_m_1'] == 'current':
                         ds['p_wtr_2'] = to_pressure(ds['p_wtr_2']-c['current_offset_2'])
-                        print('p_wtr_2 after to pressure')
-                        print(ds['p_wtr_2'])
-                ds['p_wtr_2_cor'] = offset_press(ds['p_wtr_2'], c['p_offset_2']) 
-                ds['p_wtr_2_cor'] = ds['p_wtr_2_cor'].where(ds['p_wtr_2_cor'] != 1450.0)
+                    ds['p_wtr_2_cor'] = offset_press(ds['p_wtr_2'], c['p_offset_2'])
+                    ds['p_wtr_2_cor'] = ds['p_wtr_2_cor'].where(ds['p_wtr_2_cor'] != 1450.0)
+                    ds['h_wtr_2'] = calc_water_level(ds['p_wtr_2_cor'], 
+                                                     ds['h_dvr_2'])
+                elif c['pls_m_2'] == 'centimeter':
+                    ds['h_wtr_2'] = ds['p_wtr_2']/100
+                elif ['pls_m_2'] == 'meter':
+                    ds['h_wtr_2'] = ds['p_wtr_2']
+                    
             if hasattr(ds, 'p_wtr_3'): 
-                if st == 'wat_br':
-                    if c['pls_m'] == 'current':
+                if c['pls_m_3'] == 'current' or c['pls_m_3'] == 'pressure':
+                    if c['pls_m_3'] == 'current':
                         ds['p_wtr_3'] = to_pressure(ds['p_wtr_3']-c['current_offset_3'])
-                ds['p_wtr_3_cor'] = offset_press(ds['p_wtr_3'], c['p_offset_3']) 
-                ds['p_wtr_3_cor'] = ds['p_wtr_3_cor'].where(ds['p_wtr_3_cor'] != 1450.0)
+                    ds['p_wtr_3_cor'] = offset_press(ds['p_wtr_3'], c['p_offset_3'])
+                    ds['p_wtr_3_cor'] = ds['p_wtr_3_cor'].where(ds['p_wtr_3_cor'] != 1450.0)
+                    ds['h_wtr_3'] = calc_water_level(ds['p_wtr_3_cor'], 
+                                                     ds['h_dvr_3'])
+                elif c['pls_m_3'] == 'centimeter':
+                    ds['h_wtr_3'] = ds['p_wtr_3']/100
+                elif ['pls_m_3'] == 'meter':
+                    ds['h_wtr_3'] = ds['p_wtr_3']
+                    
             if hasattr(ds, 'p_air_baro'):
                 ds['p_air_baro_cor'] = offset_press(ds['p_air_baro'], c['p_offset_a'])
   
@@ -287,21 +301,21 @@ def get_l2(L1,st):
     '''Perform L1 to L2 processing'''
     ds = L1.copy(deep=True)   
     print('Calculating water level...')
-    
+    raw_l2 = None
     # Checking if there is any water level data in the raw data
-    if 'h_wtr_1' in ds:
-        raw_l2 = ds['h_wtr_1']
-    else :
-        raw_l2 = None    
+    #if 'h_wtr_1' in ds:
+    #    raw_l2 = ds['h_wtr_1']
+    #else :
+    #    raw_l2 = None    
             
     # Calculate water level with air pressure adjustment (p = H rho g)                
     # Perform this only if p_wtr_l_cor-p_air_cor > p_dif_min and t_wtr_l_cor > t_wtr_min:    
-    if hasattr(ds, 'p_wtr_1_cor'):
-        if st in ['wat_r','rus_r']:
-            ds['h_wtr_1'] = ds['p_wtr_1_cor']
-        else:
-            ds['h_wtr_1'] = calc_water_level(ds['p_wtr_1_cor'], 
-                                             ds['h_dvr_1'])      
+    #if hasattr(ds, 'p_wtr_1_cor'):
+    #    if st in ['wat_r','rus_r']:
+    #        ds['h_wtr_1'] = ds['p_wtr_1_cor']
+    #    else:
+    #        ds['h_wtr_1'] = calc_water_level(ds['p_wtr_1_cor'], 
+    #                                         ds['h_dvr_1'])      
   
     # adding the raw water level data to the file
     if raw_l2 is not None:
@@ -309,20 +323,17 @@ def get_l2(L1,st):
    
         
     # Perform this only if p_wtr_u_cor-p_air_cor > p_dif_min and t_wtr_u_cor > t_wtr_min:
-    if hasattr(ds, 'p_wtr_2_cor'):
-       if st in ['wat_r','rus_r']:
-            ds['h_wtr_2'] = ds['p_wtr_2_cor']
-       else:
-            ds['h_wtr_2'] = calc_water_level(ds['p_wtr_2_cor'], 
-                                   ds['h_dvr_2'])
+    #if hasattr(ds, 'p_wtr_2_cor'):
+    #    ds['h_wtr_2'] = calc_water_level(ds['p_wtr_2_cor'], 
+    #                           ds['h_dvr_2'])
     
     # adding the raw water level data to the file
     if raw_l2 is not None:
         ds['h_wtr_2'] = ds['h_wtr_2'].fillna(raw_l2)
     
-    if hasattr(ds, 'p_wtr_3_cor'):
-        ds['h_wtr_3'] = calc_water_level(ds['p_wtr_3_cor'],
-                                   ds['h_dvr_3'])
+    #if hasattr(ds, 'p_wtr_3_cor'):
+    #    ds['h_wtr_3'] = calc_water_level(ds['p_wtr_3_cor'],
+    #                               ds['h_dvr_3'])
     
     
     # compute rain amount per time step
