@@ -274,7 +274,7 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
                     
             if hasattr(ds, 'p_air_baro'):
                 ds['p_air_baro_cor'] = offset_press(ds['p_air_baro'], c['p_offset_a'])
-  
+          
         # Resample to hourly mean values
         ds = resample_data(ds, ts)
         ds_list.append(ds)
@@ -354,6 +354,9 @@ def get_l2(L1,st):
         
         # Correct wat_br pls data to van essen 
         ds = ref_correction(ds)
+        
+        # Correctiong aws air temp to dmi air tempt at airport
+        ds['t_air_comb'] = _aws_to_dmi(ds['t_air_comb'])
 
         print('Smoothing and interpolating atmospheric data...')
         ds['t_air_interp'] = ds['t_air_comb'].interpolate_na('time', method='linear')
@@ -438,6 +441,8 @@ def get_l3(L2,st):
     print('L3 processing complete')
     return ds          
             
+def _aws_to_dmi(gios):
+    return 0.984*gios - 0.242
 
 def rain_amount(
     cum: xr.DataArray,
