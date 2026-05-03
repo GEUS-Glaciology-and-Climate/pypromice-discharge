@@ -185,99 +185,136 @@ def write_netcdf(ds, outfile,meta_nc_dict,st):
     ds_out.close()
             
     
+def _apply_new_setup(c, use_new):
+    '''Return a copy of config dict c. If use_new is True, any key of the
+    form "<base>_new" overrides c["<base>"]. The "new_setup" key itself
+    is excluded from this rule.'''
+    eff = dict(c)
+    if use_new:
+        for k, v in c.items():
+            if k.endswith('_new') and k != 'new_setup':
+                eff[k[:-4]] = v
+    return eff
+
+
+def _split_by_new_setup(ds, c):
+    '''Yield (ds_segment, effective_config) pairs.
+
+    If c contains "new_setup", split ds into pre- and post-cutoff segments
+    using the raw (un-offset) time index, and apply the "<key>_new"
+    overrides to the post-cutoff config. Otherwise yield (ds, c) unchanged.
+    The cutoff date is inclusive on the "new" side.'''
+    if 'new_setup' not in c:
+        yield ds, c
+        return
+    cutoff = np.datetime64(pd.to_datetime(c['new_setup']))
+    times = ds['time'].values
+    pre_mask = times < cutoff
+    post_mask = ~pre_mask
+    if pre_mask.any():
+        yield ds.isel(time=pre_mask), _apply_new_setup(c, use_new=False)
+    if post_mask.any():
+        yield ds.isel(time=post_mask), _apply_new_setup(c, use_new=True)
+
+
 def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
     '''Perform L0 to L1 processing, where input is from a list of Dataset objects
     and corresponding config toml file'''
     ds_list=[]
     
-    for i,ds in enumerate(l0_list):
+    for i,ds_full in enumerate(l0_list):
          
-        c = list(config.values())[i]
-        print(f'Correcting variables in {c["file"]}...')
-        
-        # Reformat all variables to numerical values
-        for l in list(ds.keys()):
-            if l not in ['time']:
-                ds[l] = reformat_array(ds[l])
-            
-        # Apply time offset
-        ds['time'] = offset_time(ds['time'], c['utc_offset'])
-        
-        
-        if cor:
-            if 'analog_dvr_scale' in c: 
-                if 'h_wtr_1' in ds:
-                    ds['h_wtr_1'] = ds['h_l_h'] * 10**-2 # Going from centimeters water level to meters
-                elif 'h_wtr_1' in ds:
-                    ds['h_wtr_1'] = ds['h_u_h'] * 10**-2 # Going from centimeters water level to meters
-            
-            # Calculate upper and lower dH
-            
-            if 'dh_bolt_1' in c and 'dh_diver_1' in c:            
-                h_dvr_1 = calc_dh(c['dh_bolt_1'], c['dh_diver_1'], c['dH_0']) 
-                ds['h_dvr_1'] = (('time'), [h_dvr_1]*len(ds['time'].values))     
-                
-            if 'dh_bolt_2' in c and 'dh_diver_2' in c:
-                h_dvr_2 = calc_dh(c['dh_bolt_2'], c['dh_diver_2'], c['dH_0']) 
-                ds['h_dvr_2'] = (('time'), [h_dvr_2]*len(ds['time'].values))
-            
-            if 'dh_bolt_3' in c and 'dh_diver_3' in c:            
-                h_dvr_3 = calc_dh(c['dh_bolt_3'], c['dh_diver_3'], c['dH_0']) 
-                ds['h_dvr_3'] = (('time'), [h_dvr_3]*len(ds['time'].values))   
-                
-                if 'dh_bolt_2' not in c and 'dh_diver_2' not in c:
-                    h_dvr_2 = calc_dh(c['dh_bolt_3'], c['dh_diver_3'], c['dH_0']) 
+        c_full = list(config.values())[i]
+        print(f'Correcting variables in {c_full["file"]}...')
+
+        # If the config has "new_setup", split the dataset at that date and
+        # process each segment with its own effective config (any "<key>_new"
+        # in the toml overrides "<key>" for the post-cutoff segment).
+        for ds, c in _split_by_new_setup(ds_full, c_full):
+
+            # Reformat all variables to numerical values
+            for l in list(ds.keys()):
+                if l not in ['time']:
+                    ds[l] = reformat_array(ds[l])
+
+            # Apply time offset
+            ds['time'] = offset_time(ds['time'], c['utc_offset'])
+
+
+            if cor:
+                if 'analog_dvr_scale' in c:
+                    if 'h_wtr_1' in ds:
+                        ds['h_wtr_1'] = ds['h_l_h'] * 10**-2 # Going from centimeters water level to meters
+                    elif 'h_wtr_1' in ds:
+                        ds['h_wtr_1'] = ds['h_u_h'] * 10**-2 # Going from centimeters water level to meters
+
+                # Calculate upper and lower dH
+
+                if 'dh_bolt_1' in c and 'dh_diver_1' in c:
+                    h_dvr_1 = calc_dh(c['dh_bolt_1'], c['dh_diver_1'], c['dH_0'])
+                    ds['h_dvr_1'] = (('time'), [h_dvr_1]*len(ds['time'].values))
+
+                if 'dh_bolt_2' in c and 'dh_diver_2' in c:
+                    h_dvr_2 = calc_dh(c['dh_bolt_2'], c['dh_diver_2'], c['dH_0'])
                     ds['h_dvr_2'] = (('time'), [h_dvr_2]*len(ds['time'].values))
-                
-            # Mask out where p_wtr_u and p_wtr_l are nan to also be nan here
-            
-            # Apply pressure offset, also apply to p_wtr_l, p_air
-            if hasattr(ds, 'p_wtr_1'):
-                
-                if c['pls_m_1'] == 'current' or c['pls_m_1'] == 'pressure':
-                    if c['pls_m_1'] == 'current':
-                        ds['p_wtr_1'] = to_pressure(ds['p_wtr_1']-c['current_offset_1'])
-                    ds['p_wtr_1_cor'] = offset_press(ds['p_wtr_1'], c['p_offset_1'])
-                    ds['p_wtr_1_cor'] = ds['p_wtr_1_cor'].where(ds['p_wtr_1_cor'] != 1450.0)
-                    ds['h_wtr_1'] = calc_water_level(ds['p_wtr_1_cor'], 
-                                                     ds['h_dvr_1'])
-                elif c['pls_m_1'] == 'centimeter':
-                    ds['h_wtr_1'] = ds['p_wtr_1']/100
-                elif c['pls_m_1'] == 'meter':
-                    ds['h_wtr_1'] = ds['p_wtr_1']
-                   
-            if hasattr(ds, 'p_wtr_2'): 
-                if c['pls_m_2'] == 'current' or c['pls_m_2'] == 'pressure':
-                    if c['pls_m_1'] == 'current':
-                        ds['p_wtr_2'] = to_pressure(ds['p_wtr_2']-c['current_offset_2'])
-                    ds['p_wtr_2_cor'] = offset_press(ds['p_wtr_2'], c['p_offset_2'])
-                    ds['p_wtr_2_cor'] = ds['p_wtr_2_cor'].where(ds['p_wtr_2_cor'] != 1450.0)
-                    ds['h_wtr_2'] = calc_water_level(ds['p_wtr_2_cor'], 
-                                                     ds['h_dvr_2'])
-                elif c['pls_m_2'] == 'centimeter':
-                    ds['h_wtr_2'] = ds['p_wtr_2']/100
-                elif c['pls_m_2'] == 'meter':
-                    ds['h_wtr_2'] = ds['p_wtr_2']
-                    
-            if hasattr(ds, 'p_wtr_3'): 
-                if c['pls_m_3'] == 'current' or c['pls_m_3'] == 'pressure':
-                    if c['pls_m_3'] == 'current':
-                        ds['p_wtr_3'] = to_pressure(ds['p_wtr_3']-c['current_offset_3'])
-                    ds['p_wtr_3_cor'] = offset_press(ds['p_wtr_3'], c['p_offset_3'])
-                    ds['p_wtr_3_cor'] = ds['p_wtr_3_cor'].where(ds['p_wtr_3_cor'] != 1450.0)
-                    ds['h_wtr_3'] = calc_water_level(ds['p_wtr_3_cor'], 
-                                                     ds['h_dvr_3'])
-                elif c['pls_m_3'] == 'centimeter':
-                    ds['h_wtr_3'] = ds['p_wtr_3']/100
-                elif c['pls_m_3'] == 'meter':
-                    ds['h_wtr_3'] = ds['p_wtr_3']
-                    
-            if hasattr(ds, 'p_air_baro'):
-                ds['p_air_baro_cor'] = offset_press(ds['p_air_baro'], c['p_offset_a'])
-  
-        # Resample to hourly mean values
-        ds = resample_data(ds, ts)
-        ds_list.append(ds)
+
+                if 'dh_bolt_3' in c and 'dh_diver_3' in c:
+                    h_dvr_3 = calc_dh(c['dh_bolt_3'], c['dh_diver_3'], c['dH_0'])
+                    ds['h_dvr_3'] = (('time'), [h_dvr_3]*len(ds['time'].values))
+
+                    if 'dh_bolt_2' not in c and 'dh_diver_2' not in c:
+                        h_dvr_2 = calc_dh(c['dh_bolt_3'], c['dh_diver_3'], c['dH_0'])
+                        ds['h_dvr_2'] = (('time'), [h_dvr_2]*len(ds['time'].values))
+
+                # Mask out where p_wtr_u and p_wtr_l are nan to also be nan here
+
+                # Apply pressure offset, also apply to p_wtr_l, p_air
+                if hasattr(ds, 'p_wtr_1'):
+
+                    if c['pls_m_1'] == 'current' or c['pls_m_1'] == 'pressure':
+                        if c['pls_m_1'] == 'current':
+                            ds['p_wtr_1'] = to_pressure(ds['p_wtr_1']-c['current_offset_1'])
+                        ds['p_wtr_1_cor'] = offset_press(ds['p_wtr_1'], c['p_offset_1'])
+                        ds['p_wtr_1_cor'] = ds['p_wtr_1_cor'].where(ds['p_wtr_1_cor'] != 1450.0)
+                        ds['h_wtr_1'] = calc_water_level(ds['p_wtr_1_cor'],
+                                                         ds['h_dvr_1'])
+                    elif c['pls_m_1'] == 'centimeter':
+                        ds['h_wtr_1'] = ds['p_wtr_1']/100
+                    elif c['pls_m_1'] == 'meter':
+                        ds['h_wtr_1'] = ds['p_wtr_1']
+
+                if hasattr(ds, 'p_wtr_2'):
+                    if c['pls_m_2'] == 'current' or c['pls_m_2'] == 'pressure':
+                        if c['pls_m_1'] == 'current':
+                            ds['p_wtr_2'] = to_pressure(ds['p_wtr_2']-c['current_offset_2'])
+                        ds['p_wtr_2_cor'] = offset_press(ds['p_wtr_2'], c['p_offset_2'])
+                        ds['p_wtr_2_cor'] = ds['p_wtr_2_cor'].where(ds['p_wtr_2_cor'] != 1450.0)
+                        ds['h_wtr_2'] = calc_water_level(ds['p_wtr_2_cor'],
+                                                         ds['h_dvr_2'])
+                    elif c['pls_m_2'] == 'centimeter':
+                        ds['h_wtr_2'] = ds['p_wtr_2']/100
+                    elif c['pls_m_2'] == 'meter':
+                        ds['h_wtr_2'] = ds['p_wtr_2']
+
+                if hasattr(ds, 'p_wtr_3'):
+                    if c['pls_m_3'] == 'current' or c['pls_m_3'] == 'pressure':
+                        if c['pls_m_3'] == 'current':
+                            ds['p_wtr_3'] = to_pressure(ds['p_wtr_3']-c['current_offset_3'])
+                        ds['p_wtr_3_cor'] = offset_press(ds['p_wtr_3'], c['p_offset_3'])
+                        ds['p_wtr_3_cor'] = ds['p_wtr_3_cor'].where(ds['p_wtr_3_cor'] != 1450.0)
+                        ds['h_wtr_3'] = calc_water_level(ds['p_wtr_3_cor'],
+                                                         ds['h_dvr_3'])
+                    elif c['pls_m_3'] == 'centimeter':
+                        ds['h_wtr_3'] = ds['p_wtr_3']/100
+                    elif c['pls_m_3'] == 'meter':
+                        ds['h_wtr_3'] = ds['p_wtr_3']
+
+                if hasattr(ds, 'p_air_baro'):
+                    ds['p_air_baro_cor'] = offset_press(ds['p_air_baro'], c['p_offset_a'])
+
+            # Resample to hourly mean values
+            ds = resample_data(ds, ts)
+            ds_list.append(ds)
 
     # Combine all files
     print('Combining files into single L1 object...')
@@ -354,6 +391,9 @@ def get_l2(L1,st):
         
         # Correct wat_br pls data to van essen 
         ds = ref_correction(ds)
+        
+        # Correctiong aws air temp to dmi air tempt at airport
+        ds['t_air_comb'] = _aws_to_dmi(ds['t_air_comb'])
 
         print('Smoothing and interpolating atmospheric data...')
         ds['t_air_interp'] = ds['t_air_comb'].interpolate_na('time', method='linear')
@@ -438,6 +478,8 @@ def get_l3(L2,st):
     print('L3 processing complete')
     return ds          
             
+def _aws_to_dmi(gios):
+    return 0.984*gios - 0.242
 
 def rain_amount(
     cum: xr.DataArray,
