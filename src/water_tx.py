@@ -57,13 +57,38 @@ def get_l0(config):
     for i, c in config.items(): 
         print(f'Loading {c["file"]}')
         if os.path.isfile(c['file']):
-            ds = load_l0(c['file'], 
-                         c['columns'],
-                         c['skiprows'],
-                         c['nodata'],
-                         c['format'],
-                         c['last_good_data_line'])
-            ds_list.append(ds)
+            if 'columns_new' in c and 'new_setup' in c:
+                # Column count changed at new_setup date. Load the file
+                # twice: once with the old columns (skipping lines that
+                # don't match) and once with the new columns.
+                print(f'  Detected column format change at {c["new_setup"]},'
+                      f' loading with old ({len(c["columns"])} cols) and'
+                      f' new ({len(c["columns_new"])} cols) format...')
+                ds_old = load_l0(c['file'], 
+                             c['columns'],
+                             c['skiprows'],
+                             c['nodata'],
+                             c['format'],
+                             c['last_good_data_line'],
+                             on_bad_lines='skip')
+                ds_new = load_l0(c['file'], 
+                             c['columns_new'],
+                             c['skiprows'],
+                             c['nodata'],
+                             c['format'],
+                             c['last_good_data_line'],
+                             on_bad_lines='skip')
+                # Combine old and new format data
+                ds = ds_old.combine_first(ds_new)
+                ds_list.append(ds)
+            else:
+                ds = load_l0(c['file'], 
+                             c['columns'],
+                             c['skiprows'],
+                             c['nodata'],
+                             c['format'],
+                             c['last_good_data_line'])
+                ds_list.append(ds)
     return ds_list
         
 
@@ -641,7 +666,7 @@ def get_config(config_file, inpath):
     return conf
 
 def load_l0(f, columns, skiprows, nodata, file_format, lastrow=None, 
-            encode="ISO-8859-1"):
+            encode="ISO-8859-1", on_bad_lines='error'):
     '''Load Level 0 discharge data from file
 
     Parameters
@@ -660,6 +685,9 @@ def load_l0(f, columns, skiprows, nodata, file_format, lastrow=None,
         Last row of good data. The default is None.
     encode : str, optional
         File encoding. The default is "ISO-8859-1".
+    on_bad_lines : str, optional
+        How to handle lines with too many/few fields. 
+        'error' (default) raises, 'skip' silently drops them.
 
     Returns
     -------
@@ -681,8 +709,15 @@ def load_l0(f, columns, skiprows, nodata, file_format, lastrow=None,
     df = pd.read_csv(f, comment='#', sep=s, names=columns, skiprows=skiprows, 
                      na_values=nodata, index_col='time', skip_blank_lines=True, 
                      nrows=nr, encoding=encode, engine='python',
-                     parse_dates=True)
+                     parse_dates=True, on_bad_lines=on_bad_lines)
     
+    if df.empty:
+        # Return empty dataset (can happen when on_bad_lines='skip'
+        # filters out all rows due to column count mismatch)
+        ds = xr.Dataset()
+        ds['time'] = ('time', [])
+        return ds
+
     if not isinstance(df.index[0], pd._libs.tslibs.timestamps.Timestamp): 
         print('Inconsistent formatting. Attempting flexible loading...')
         df = load_l0_flexible(f, columns, skiprows, nodata, lastrow, encode)
