@@ -308,6 +308,9 @@ def get_l1(l0_list, config,st, l0_air=None,cor=True,ts='10min'):
                     elif c['pls_m_1'] == 'meter':
                         ds['h_wtr_1'] = ds['p_wtr_1']
 
+                    if 'h_offset_1' in c and hasattr(ds, 'h_wtr_1'):
+                        ds['h_wtr_1'] = ds['h_wtr_1'] + c['h_offset_1']
+
                 if hasattr(ds, 'p_wtr_2'):
                     if c['pls_m_2'] == 'current' or c['pls_m_2'] == 'pressure':
                         if c['pls_m_1'] == 'current':
